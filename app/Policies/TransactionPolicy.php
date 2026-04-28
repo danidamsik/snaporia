@@ -23,6 +23,8 @@ class TransactionPolicy
 
     public function delete(User $user, Transaction $transaction): bool
     {
-        return $user->isSuperAdmin() && ! in_array($transaction->status, ['settlement', 'capture'], true);
+        return $user->isSuperAdmin()
+            && ! in_array($transaction->status, ['settlement', 'capture'], true)
+            && $transaction->order()->where('status', '!=', 'paid')->exists();
     }
 }

@@ -94,6 +94,7 @@ class PublicEventController extends Controller
             'photos_count' => $event->photos_count ?? $event->photos()->count(),
             'cover_url' => $coverPhoto ? route('public.photos.watermarked', $coverPhoto) : null,
             'url' => route('events.show', $event),
+            'package_checkout_url' => route('checkout.package.show', $event),
         ];
     }
 
@@ -104,6 +105,7 @@ class PublicEventController extends Controller
             'filename' => $photo->filename,
             'sort_order' => $photo->sort_order,
             'watermarked_url' => route('public.photos.watermarked', $photo),
+            'checkout_url' => route('checkout.single.show', ['photos' => [$photo->id]]),
         ];
     }
 }

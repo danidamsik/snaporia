@@ -1,9 +1,8 @@
 <script setup>
 import { useForm, Link } from '@inertiajs/vue3';
-import { CalendarDays, Download, Image, MapPin, Search, ShoppingCart } from 'lucide-vue-next';
+import { CalendarDays, Image, MapPin, Search, ShoppingCart } from 'lucide-vue-next';
 import EmptyState from '@/Components/EmptyState.vue';
 import Pagination from '@/Components/Pagination.vue';
-import PrimaryButton from '@/Components/PrimaryButton.vue';
 import PublicLayout from '@/Layouts/PublicLayout.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
@@ -89,10 +88,13 @@ const formatDate = (value) =>
                                 <span class="text-sm text-ink-muted">Paket event</span>
                                 <span class="font-semibold text-primary">{{ formatCurrency(event.price_package) }}</span>
                             </div>
-                            <PrimaryButton type="button" disabled>
+                            <Link
+                                :href="event.package_checkout_url"
+                                class="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-transparent bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                            >
                                 <ShoppingCart class="h-4 w-4" aria-hidden="true" />
                                 Beli Paket
-                            </PrimaryButton>
+                            </Link>
                         </div>
                     </div>
                 </div>
@@ -128,10 +130,13 @@ const formatDate = (value) =>
                         <p class="truncate text-sm font-semibold text-ink">{{ photo.filename }}</p>
                         <div class="mt-3 flex items-center justify-between gap-2">
                             <span class="text-sm text-ink-muted">{{ formatCurrency(event.price_per_photo) }}</span>
-                            <PrimaryButton type="button" disabled>
-                                <Download class="h-4 w-4" aria-hidden="true" />
+                            <Link
+                                :href="photo.checkout_url"
+                                class="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-transparent bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                            >
+                                <ShoppingCart class="h-4 w-4" aria-hidden="true" />
                                 Beli
-                            </PrimaryButton>
+                            </Link>
                         </div>
                     </div>
                 </article>

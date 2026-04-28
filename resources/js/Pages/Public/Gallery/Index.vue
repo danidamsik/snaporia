@@ -1,6 +1,6 @@
 <script setup>
 import { useForm, Link } from '@inertiajs/vue3';
-import { CalendarDays, Image, MapPin, Search } from 'lucide-vue-next';
+import { CalendarDays, Image, MapPin, Search, ShoppingCart } from 'lucide-vue-next';
 import EmptyState from '@/Components/EmptyState.vue';
 import Pagination from '@/Components/Pagination.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
@@ -88,7 +88,16 @@ const formatDate = (value) =>
                                 {{ photo.event.location || 'Lokasi menyusul' }}
                             </p>
                         </div>
-                        <p class="mt-3 text-sm font-semibold text-ink">{{ formatCurrency(photo.event.price_per_photo) }}</p>
+                        <div class="mt-3 flex items-center justify-between gap-2">
+                            <p class="text-sm font-semibold text-ink">{{ formatCurrency(photo.event.price_per_photo) }}</p>
+                            <Link
+                                :href="photo.checkout_url"
+                                class="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-transparent bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                            >
+                                <ShoppingCart class="h-4 w-4" aria-hidden="true" />
+                                Beli
+                            </Link>
+                        </div>
                     </div>
                 </article>
             </div>

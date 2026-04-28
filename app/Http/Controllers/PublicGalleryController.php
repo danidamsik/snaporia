@@ -44,6 +44,7 @@ class PublicGalleryController extends Controller
                 'id' => $photo->id,
                 'filename' => $photo->filename,
                 'watermarked_url' => route('public.photos.watermarked', $photo),
+                'checkout_url' => route('checkout.single.show', ['photos' => [$photo->id]]),
                 'event' => [
                     'id' => $photo->event->id,
                     'name' => $photo->event->name,
