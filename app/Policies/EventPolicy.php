@@ -1,0 +1,37 @@
+<?php
+
+namespace App\Policies;
+
+use App\Models\Event;
+use App\Models\User;
+
+class EventPolicy
+{
+    public function viewAny(User $user): bool
+    {
+        return $user->isSuperAdmin() || $user->isAdmin();
+    }
+
+    public function view(User $user, Event $event): bool
+    {
+        return $user->isSuperAdmin() || ($user->isAdmin() && $event->admin_id === $user->id);
+    }
+
+    public function create(User $user): bool
+    {
+        return $user->isAdmin();
+    }
+
+    public function update(User $user, Event $event): bool
+    {
+        return $user->isAdmin() && $event->admin_id === $user->id;
+    }
+
+    public function delete(User $user, Event $event): bool
+    {
+        return $user->isAdmin()
+            && $event->admin_id === $user->id
+            && $event->orders()->doesntExist()
+            && $event->photos()->whereHas('orderItems')->doesntExist();
+    }
+}
