@@ -2,6 +2,7 @@
 import { Link, useForm } from '@inertiajs/vue3';
 import { Save } from 'lucide-vue-next';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import FormSelect from '@/Components/FormSelect.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
@@ -34,7 +35,7 @@ const submit = () => {
         <template #header>
             <div>
                 <h1 class="font-heading text-xl font-semibold text-ink">Edit Admin</h1>
-                <p class="mt-1 text-sm text-ink-muted">Admin hanya dapat diubah sebelum memiliki event atau order.</p>
+                <Breadcrumbs :items="[{ label: 'Dashboard', href: route('dashboard') }, { label: 'Manajemen Pengguna', href: route('super-admin.users.index') }, { label: 'Edit Admin' }]" />
             </div>
         </template>
 

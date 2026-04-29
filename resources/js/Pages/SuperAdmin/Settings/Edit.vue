@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import { Save, Settings, ShieldCheck } from 'lucide-vue-next';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
@@ -55,7 +56,7 @@ const submit = () => {
         <template #header>
             <div>
                 <h1 class="font-heading text-xl font-semibold text-ink">Settings</h1>
-                <p class="mt-1 text-sm text-ink-muted">Kelola konfigurasi umum non-sensitif aplikasi.</p>
+                <Breadcrumbs :items="[{ label: 'Dashboard', href: route('dashboard') }, { label: 'Settings' }]" />
             </div>
         </template>
 

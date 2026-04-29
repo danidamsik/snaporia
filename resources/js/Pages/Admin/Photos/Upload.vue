@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import { Link, useForm, usePage } from '@inertiajs/vue3';
 import { CheckCircle2, FileImage, UploadCloud, XCircle } from 'lucide-vue-next';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import EmptyState from '@/Components/EmptyState.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
@@ -85,7 +86,7 @@ const submit = () => {
         <template #header>
             <div>
                 <h1 class="font-heading text-xl font-semibold text-ink">Upload Foto</h1>
-                <p class="mt-1 text-sm text-ink-muted">Upload batch ke event milik Anda dan buat preview watermark otomatis.</p>
+                <Breadcrumbs :items="[{ label: 'Dashboard', href: route('dashboard') }, { label: 'Foto Saya', href: route('admin.photos.index') }, { label: 'Upload Foto' }]" />
             </div>
         </template>
 

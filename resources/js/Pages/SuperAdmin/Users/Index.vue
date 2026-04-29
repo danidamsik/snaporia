@@ -2,6 +2,7 @@
 import { Link, router, useForm } from '@inertiajs/vue3';
 import { Edit, Plus, Search, Trash2, UserX } from 'lucide-vue-next';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import DataTable from '@/Components/DataTable.vue';
 import EmptyState from '@/Components/EmptyState.vue';
 import FormSelect from '@/Components/FormSelect.vue';
@@ -66,7 +67,7 @@ const deleteUser = (user) => {
         <template #header>
             <div>
                 <h1 class="font-heading text-xl font-semibold text-ink">Manajemen Pengguna</h1>
-                <p class="mt-1 text-sm text-ink-muted">Kelola akun Admin, status user, dan akses dasar.</p>
+                <Breadcrumbs :items="[{ label: 'Dashboard', href: route('dashboard') }, { label: 'Manajemen Pengguna' }]" />
             </div>
         </template>
 

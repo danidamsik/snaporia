@@ -2,6 +2,7 @@
 import { Link, router, useForm } from '@inertiajs/vue3';
 import { Eye, Search, Trash2 } from 'lucide-vue-next';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import DataTable from '@/Components/DataTable.vue';
 import EmptyState from '@/Components/EmptyState.vue';
 import FormSelect from '@/Components/FormSelect.vue';
@@ -107,36 +108,41 @@ const formatDateTime = (value) =>
         <template #header>
             <div>
                 <h1 class="font-heading text-xl font-semibold text-ink">{{ title }}</h1>
-                <p class="mt-1 text-sm text-ink-muted">Pantau status pembayaran, order, event, dan pembeli.</p>
+                <Breadcrumbs :items="[{ label: 'Dashboard', href: route('dashboard') }, { label: title }]" />
             </div>
         </template>
 
         <div class="space-y-5">
-            <form class="grid gap-3 rounded-lg border border-border bg-white p-4 lg:grid-cols-[1fr_180px_180px_160px_160px_auto]" @submit.prevent="submit">
-                <TextInput v-model="form.q" type="search" maxlength="100" placeholder="Cari order atau Midtrans ID" />
-                <FormSelect v-model="form.status" :options="statusOptions" />
+            <form
+                class="grid grid-cols-1 gap-3 rounded-lg border border-border bg-white p-4 sm:grid-cols-2 lg:grid-cols-6"
+                @submit.prevent="submit"
+            >
+                <TextInput v-model="form.q" type="search" maxlength="100" placeholder="Cari order atau Midtrans ID" class="w-full min-w-0 lg:col-span-2" />
+                <FormSelect v-model="form.status" :options="statusOptions" class="w-full min-w-0 lg:col-span-2" />
                 <FormSelect
                     v-model="form.event_id"
                     :options="[{ label: 'Semua event', value: '' }, ...events.map((event) => ({ label: event.name, value: event.id }))]"
+                    class="w-full min-w-0 lg:col-span-2"
                 />
                 <FormSelect
                     v-if="admins.length"
                     v-model="form.admin_id"
                     :options="[{ label: 'Semua admin', value: '' }, ...admins.map((admin) => ({ label: admin.name, value: admin.id }))]"
+                    class="w-full min-w-0 lg:col-span-2"
                 />
                 <input
                     v-model="form.date_from"
                     type="date"
-                    class="min-h-10 rounded-md border-border text-sm shadow-sm focus:border-primary focus:ring-primary"
+                    class="min-h-10 w-full min-w-0 rounded-md border-border text-sm shadow-sm focus:border-primary focus:ring-primary lg:col-span-2"
                     aria-label="Tanggal awal"
                 />
                 <input
                     v-model="form.date_to"
                     type="date"
-                    class="min-h-10 rounded-md border-border text-sm shadow-sm focus:border-primary focus:ring-primary"
+                    class="min-h-10 w-full min-w-0 rounded-md border-border text-sm shadow-sm focus:border-primary focus:ring-primary lg:col-span-2"
                     aria-label="Tanggal akhir"
                 />
-                <SecondaryButton type="submit" :disabled="form.processing">
+                <SecondaryButton type="submit" :disabled="form.processing" class="w-full sm:col-span-2 lg:col-span-2">
                     <Search class="h-4 w-4" aria-hidden="true" />
                     Filter
                 </SecondaryButton>

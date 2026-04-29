@@ -2,6 +2,7 @@
 import { Link, useForm } from '@inertiajs/vue3';
 import { Save } from 'lucide-vue-next';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
@@ -25,7 +26,7 @@ const submit = () => {
         <template #header>
             <div>
                 <h1 class="font-heading text-xl font-semibold text-ink">Buat Admin</h1>
-                <p class="mt-1 text-sm text-ink-muted">Akun yang dibuat dari halaman ini selalu berperan sebagai Admin.</p>
+                <Breadcrumbs :items="[{ label: 'Dashboard', href: route('dashboard') }, { label: 'Manajemen Pengguna', href: route('super-admin.users.index') }, { label: 'Buat Admin' }]" />
             </div>
         </template>
 

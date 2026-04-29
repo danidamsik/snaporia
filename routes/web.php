@@ -45,7 +45,7 @@ Route::get('/dashboard', function (): RedirectResponse {
     return match (request()->user()->role) {
         User::ROLE_SUPER_ADMIN => redirect()->route('super-admin.dashboard'),
         User::ROLE_ADMIN => redirect()->route('admin.dashboard'),
-        default => redirect()->route('visitor.dashboard'),
+        default => redirect()->route('events.index'),
     };
 })->middleware(['auth', 'active', 'verified'])->name('dashboard');
 
@@ -100,10 +100,6 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
         Route::get('/transactions/{transaction}', [AdminTransactionController::class, 'show'])->name('transactions.show');
         Route::get('/reports/sales', [AdminSalesReportController::class, 'index'])->name('reports.sales');
     });
-
-    Route::get('/visitor/dashboard', [DashboardController::class, 'visitor'])
-        ->middleware('role:visitor')
-        ->name('visitor.dashboard');
 
     Route::middleware('role:visitor')->prefix('checkout')->name('checkout.')->group(function () {
         Route::get('/single', [CheckoutController::class, 'single'])->name('single.show');

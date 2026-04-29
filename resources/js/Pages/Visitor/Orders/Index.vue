@@ -1,9 +1,9 @@
 <script setup>
 import { Link } from '@inertiajs/vue3';
-import { CalendarDays, Camera, Download, Eye, FileText, MapPin } from 'lucide-vue-next';
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import { CalendarDays, Download, Eye, FileText, MapPin } from 'lucide-vue-next';
 import EmptyState from '@/Components/EmptyState.vue';
 import Pagination from '@/Components/Pagination.vue';
+import PublicLayout from '@/Layouts/PublicLayout.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
 
 defineProps({
@@ -41,23 +41,13 @@ const typeLabel = (type) => (type === 'package' ? 'Paket Event' : 'Foto Satuan')
 </script>
 
 <template>
-    <AuthenticatedLayout>
-        <template #header>
-            <h1 class="font-heading text-xl font-semibold text-ink">{{ title }}</h1>
-        </template>
-
-        <div class="space-y-5">
+    <PublicLayout>
+        <section class="mx-auto max-w-7xl space-y-5 px-4 py-8 sm:px-6 lg:px-8">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
+                    <h1 class="font-heading text-2xl font-semibold text-ink">{{ title }}</h1>
                     <p class="text-sm text-ink-muted">{{ orders.total }} order ditemukan</p>
                 </div>
-                <Link
-                    :href="route('events.index')"
-                    class="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-white px-4 py-2 text-sm font-semibold text-ink shadow-sm transition hover:bg-surface focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-                >
-                    <Camera class="h-4 w-4" aria-hidden="true" />
-                    Jelajah Event
-                </Link>
             </div>
 
             <div v-if="orders.data.length" class="overflow-hidden rounded-lg border border-border bg-white shadow-sm">
@@ -111,18 +101,9 @@ const typeLabel = (type) => (type === 'package' ? 'Paket Event' : 'Foto Satuan')
                 <template #icon>
                     <FileText class="h-6 w-6" aria-hidden="true" />
                 </template>
-                <template #action>
-                    <Link
-                        :href="route('events.index')"
-                        class="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-transparent bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-                    >
-                        <Camera class="h-4 w-4" aria-hidden="true" />
-                        Jelajah Event
-                    </Link>
-                </template>
             </EmptyState>
 
             <Pagination :links="orders.links" />
-        </div>
-    </AuthenticatedLayout>
+        </section>
+    </PublicLayout>
 </template>

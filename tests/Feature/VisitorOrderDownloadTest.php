@@ -105,6 +105,25 @@ class VisitorOrderDownloadTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_pending_order_detail_exposes_payment_actions(): void
+    {
+        $visitor = User::factory()->create(['role' => User::ROLE_VISITOR]);
+        [, $order] = $this->makeOrder($visitor, [
+            'status' => Order::STATUS_PENDING,
+        ]);
+
+        $this->actingAs($visitor)
+            ->get(route('visitor.orders.show', $order))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Visitor/Orders/Show')
+                ->where('order.status', Order::STATUS_PENDING)
+                ->where('order.pay_url', route('payment.orders.pay', $order))
+                ->where('order.refresh_url', route('payment.orders.refresh', $order))
+                ->where('order.payment', null)
+            );
+    }
+
     public function test_missing_original_file_returns_safe_error(): void
     {
         Storage::fake('local');

@@ -90,64 +90,6 @@ class DashboardRoleTest extends TestCase
             );
     }
 
-    public function test_visitor_dashboard_only_shows_owned_orders(): void
-    {
-        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
-        [$visitor, $otherVisitor] = User::factory()->count(2)->create(['role' => User::ROLE_VISITOR]);
-        $event = $this->makeEvent($admin);
-        $photo = $this->makePhoto($event);
-        $paidOrder = $this->makeOrder($visitor, $event, [
-            'order_code' => 'SNP-DASH-VISITOR-0001',
-            'status' => Order::STATUS_PAID,
-            'total_amount' => 50000,
-            'paid_at' => now(),
-        ]);
-        OrderItem::create(['order_id' => $paidOrder->id, 'photo_id' => $photo->id, 'price' => 50000]);
-        $this->makeOrder($visitor, $event, [
-            'order_code' => 'SNP-DASH-PENDING-0001',
-            'status' => Order::STATUS_PENDING,
-            'total_amount' => 25000,
-        ]);
-        $this->makeOrder($otherVisitor, $event, [
-            'order_code' => 'SNP-DASH-OTHER-0001',
-            'status' => Order::STATUS_PAID,
-            'total_amount' => 999999,
-            'paid_at' => now(),
-        ]);
-
-        $this->actingAs($visitor)
-            ->get(route('visitor.dashboard'))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->component('Dashboard')
-                ->where('dashboardRole', User::ROLE_VISITOR)
-                ->where('stats.0.value', 2)
-                ->where('stats.1.value', 1)
-                ->where('stats.2.value', 1)
-                ->where('stats.3.value', 50000)
-                ->has('recentOrders', 2)
-                ->where('recentOrders.0.order_code', 'SNP-DASH-PENDING-0001')
-                ->where('recentOrders.1.order_code', 'SNP-DASH-VISITOR-0001')
-            );
-    }
-
-    public function test_dashboard_shows_empty_state_data_when_no_operational_data_exists(): void
-    {
-        $visitor = User::factory()->create(['role' => User::ROLE_VISITOR]);
-
-        $this->actingAs($visitor)
-            ->get(route('visitor.dashboard'))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->component('Dashboard')
-                ->where('stats.0.value', 0)
-                ->where('stats.1.value', 0)
-                ->where('stats.2.value', 0)
-                ->where('stats.3.value', 0)
-                ->has('recentOrders', 0)
-            );
-    }
-
     private function makeEvent(User $admin, array $overrides = []): Event
     {
         return Event::create(array_merge([

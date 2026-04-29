@@ -15,6 +15,7 @@ import {
     Users,
 } from 'lucide-vue-next';
 import EmptyState from '@/Components/EmptyState.vue';
+import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
 
 const props = defineProps({
@@ -75,13 +76,6 @@ const iconClasses = {
 const roleTitle = {
     super_admin: 'Dashboard Super Admin',
     admin: 'Dashboard Admin',
-    visitor: 'Dashboard Visitor',
-};
-
-const roleDescription = {
-    super_admin: 'Ringkasan user, event, foto, order, dan transaksi seluruh sistem.',
-    admin: 'Ringkasan event, foto, transaksi, dan total penjualan milik Anda.',
-    visitor: 'Ringkasan order terbaru, status pembayaran, dan akses download.',
 };
 
 const formatCurrency = (value) =>
@@ -128,7 +122,7 @@ const typeLabel = (type) => (type === 'package' ? 'Paket Event' : 'Foto Satuan')
         <template #header>
             <div>
                 <h1 class="font-heading text-xl font-semibold text-ink">{{ roleTitle[dashboardRole] ?? 'Dashboard' }}</h1>
-                <p class="mt-1 text-sm text-ink-muted">{{ roleDescription[dashboardRole] ?? 'Ringkasan aktivitas Snaporia' }}</p>
+                <Breadcrumbs :items="[{ label: roleTitle[dashboardRole] ?? 'Dashboard' }]" />
             </div>
         </template>
 

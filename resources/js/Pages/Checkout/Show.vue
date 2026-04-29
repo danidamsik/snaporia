@@ -1,7 +1,8 @@
 <script setup>
-import { computed } from 'vue';
-import { Link, useForm } from '@inertiajs/vue3';
-import { CalendarDays, CheckCircle2, Clock3, CreditCard, ExternalLink, Image, MapPin, RefreshCw, ShoppingCart } from 'lucide-vue-next';
+import { computed, onMounted, ref } from 'vue';
+import axios from 'axios';
+import { Link } from '@inertiajs/vue3';
+import { CalendarDays, Clock3, CreditCard, ExternalLink, Image, MapPin, RefreshCw, ShoppingCart } from 'lucide-vue-next';
 import InputError from '@/Components/InputError.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import PublicLayout from '@/Layouts/PublicLayout.vue';
@@ -15,32 +16,233 @@ const props = defineProps({
     },
 });
 
-const form = useForm({
-    photos: props.checkout.photo_ids ?? [],
-});
-const paymentForm = useForm({});
-const refreshForm = useForm({});
+const checkout = ref(props.checkout);
+const formErrors = ref({});
+const isSubmittingOrder = ref(false);
+const isCreatingPayment = ref(false);
+const isRefreshingStatus = ref(false);
+let snapLoader = null;
 
-const isPreview = computed(() => props.checkout.mode === 'preview');
-const isSingle = computed(() => props.checkout.type === 'single');
+const isPreview = computed(() => checkout.value.mode === 'preview');
+const isSingle = computed(() => checkout.value.type === 'single');
 const typeLabel = computed(() => (isSingle.value ? 'Foto Satuan' : 'Paket Event'));
 
-const submit = () => {
-    form.post(props.checkout.store_url, {
-        preserveScroll: true,
+const toast = (type, title, message = '') => {
+    window.dispatchEvent(
+        new CustomEvent('snaporia:toast', {
+            detail: { type, title, message },
+        })
+    );
+};
+
+const jsonHeaders = {
+    Accept: 'application/json',
+};
+
+const submit = async () => {
+    formErrors.value = {};
+    isSubmittingOrder.value = true;
+
+    try {
+        const snapPromise = loadSnap().then(
+            (snap) => ({ snap }),
+            (error) => ({ error })
+        );
+        const { data } = await axios.post(
+            checkout.value.store_url,
+            {
+                photos: checkout.value.photo_ids ?? [],
+            },
+            { headers: jsonHeaders }
+        );
+
+        checkout.value = data.checkout;
+        toast('success', data.message ?? 'Order berhasil dibuat.');
+        const snapResult = await snapPromise;
+        if (snapResult.error) {
+            toast('error', 'Modal Midtrans belum bisa dibuka.', snapResult.error.message);
+        } else {
+            payWithSnap(snapResult.snap, data.payment?.snap_token ?? data.checkout?.payment?.snap_token);
+        }
+    } catch (error) {
+        handleCheckoutError(error);
+    } finally {
+        isSubmittingOrder.value = false;
+    }
+};
+
+const createPayment = async () => {
+    if (!checkout.value.pay_url) {
+        return;
+    }
+
+    formErrors.value = {};
+    isCreatingPayment.value = true;
+
+    try {
+        const snapPromise = loadSnap().then(
+            (snap) => ({ snap }),
+            (error) => ({ error })
+        );
+        const { data } = await axios.post(checkout.value.pay_url, {}, { headers: jsonHeaders });
+
+        checkout.value = {
+            ...checkout.value,
+            status: data.order?.status ?? checkout.value.status,
+            paid_at: data.order?.paid_at ?? checkout.value.paid_at,
+            expires_at: data.order?.expires_at ?? checkout.value.expires_at,
+            payment: data.payment,
+        };
+
+        toast('success', data.message ?? 'Pembayaran siap dibuka.');
+        const snapResult = await snapPromise;
+        if (snapResult.error) {
+            toast('error', 'Modal Midtrans belum bisa dibuka.', snapResult.error.message);
+        } else {
+            payWithSnap(snapResult.snap, data.payment?.snap_token);
+        }
+    } catch (error) {
+        handleCheckoutError(error);
+    } finally {
+        isCreatingPayment.value = false;
+    }
+};
+
+const refreshStatus = async ({ silent = false } = {}) => {
+    if (!checkout.value.refresh_url) {
+        return;
+    }
+
+    isRefreshingStatus.value = true;
+
+    try {
+        const { data } = await axios.post(checkout.value.refresh_url, {}, { headers: jsonHeaders });
+
+        checkout.value = {
+            ...checkout.value,
+            status: data.order?.status ?? checkout.value.status,
+            paid_at: data.order?.paid_at ?? checkout.value.paid_at,
+            expires_at: data.order?.expires_at ?? checkout.value.expires_at,
+            payment: data.payment ?? checkout.value.payment,
+        };
+
+        if (!silent) {
+            toast('success', data.message ?? 'Status pembayaran diperbarui.');
+        }
+    } catch (error) {
+        if (!silent) {
+            handleCheckoutError(error);
+        }
+    } finally {
+        isRefreshingStatus.value = false;
+    }
+};
+
+const openSnap = async (snapToken) => {
+    if (!snapToken) {
+        toast('warning', 'Token pembayaran belum tersedia.');
+        return;
+    }
+
+    try {
+        const snap = await loadSnap();
+        payWithSnap(snap, snapToken);
+    } catch (error) {
+        toast('error', 'Modal Midtrans belum bisa dibuka.', error.message);
+    }
+};
+
+const payWithSnap = (snap, snapToken) => {
+    if (!snapToken) {
+        toast('warning', 'Token pembayaran belum tersedia.');
+        return;
+    }
+
+    if (!snap?.pay) {
+        toast('error', 'Modal Midtrans belum siap.');
+        return;
+    }
+
+    snap.pay(snapToken, {
+        onSuccess: async () => {
+            toast('success', 'Pembayaran berhasil diproses.');
+            await refreshStatus({ silent: true });
+        },
+        onPending: async () => {
+            toast('info', 'Pembayaran masih menunggu konfirmasi.');
+            await refreshStatus({ silent: true });
+        },
+        onError: () => {
+            toast('error', 'Pembayaran gagal diproses.');
+        },
+        onClose: () => {
+            toast('info', 'Modal pembayaran ditutup.');
+        },
     });
 };
 
-const createPayment = () => {
-    paymentForm.post(props.checkout.pay_url, {
-        preserveScroll: true,
+const loadSnap = () => {
+    if (snapLoader) {
+        return snapLoader;
+    }
+
+    snapLoader = new Promise((resolve, reject) => {
+        if (window.snap?.pay) {
+            resolve(window.snap);
+            return;
+        }
+
+        const snapConfig = checkout.value.midtrans ?? {};
+        if (!snapConfig.client_key) {
+            reject(new Error('Client key Midtrans belum dikonfigurasi.'));
+            return;
+        }
+
+        const existingScript = document.getElementById('midtrans-snap-js');
+        if (existingScript) {
+            if (existingScript.dataset.loaded === 'true' && window.snap?.pay) {
+                resolve(window.snap);
+                return;
+            }
+
+            existingScript.addEventListener('load', () => resolve(window.snap), { once: true });
+            existingScript.addEventListener('error', () => reject(new Error('Gagal memuat Snap JS.')), { once: true });
+            return;
+        }
+
+        const script = document.createElement('script');
+        script.id = 'midtrans-snap-js';
+        script.src = snapConfig.snap_js_url;
+        script.dataset.clientKey = snapConfig.client_key;
+        script.onload = () => {
+            script.dataset.loaded = 'true';
+            resolve(window.snap);
+        };
+        script.onerror = () => reject(new Error('Gagal memuat Snap JS.'));
+        document.body.appendChild(script);
     });
+
+    snapLoader.catch(() => {
+        snapLoader = null;
+    });
+
+    return snapLoader;
 };
 
-const refreshStatus = () => {
-    refreshForm.post(props.checkout.refresh_url, {
-        preserveScroll: true,
-    });
+const handleCheckoutError = (error) => {
+    const response = error.response;
+
+    if (response?.status === 422 && response.data?.errors) {
+        formErrors.value = response.data.errors;
+        toast('warning', 'Periksa kembali data checkout.');
+        return;
+    }
+
+    if (response?.data?.checkout) {
+        checkout.value = response.data.checkout;
+    }
+
+    toast('error', response?.data?.message ?? 'Checkout belum bisa diproses.');
 };
 
 const formatCurrency = (value) =>
@@ -69,6 +271,10 @@ const formatDateTime = (value) =>
               minute: '2-digit',
           }).format(new Date(value))
         : '-';
+
+onMounted(() => {
+    loadSnap().catch(() => {});
+});
 </script>
 
 <template>
@@ -154,34 +360,44 @@ const formatDateTime = (value) =>
                 </div>
 
                 <form v-if="isPreview" class="mt-5" @submit.prevent="submit">
-                    <InputError class="mb-3" :message="form.errors.photos || form.errors.event" />
-                    <PrimaryButton type="submit" class="w-full" :disabled="form.processing">
+                    <InputError class="mb-3" :message="formErrors.photos?.[0] || formErrors.event?.[0]" />
+                    <PrimaryButton type="submit" class="w-full" :disabled="isSubmittingOrder">
                         <CreditCard class="h-4 w-4" aria-hidden="true" />
-                        Buat Order
+                        Buat Order & Bayar
                     </PrimaryButton>
                 </form>
 
                 <div v-else class="mt-5 space-y-3">
                     <template v-if="checkout.status === 'pending'">
+                        <PrimaryButton
+                            v-if="checkout.payment?.snap_token"
+                            type="button"
+                            class="w-full"
+                            :disabled="isCreatingPayment"
+                            @click="openSnap(checkout.payment.snap_token)"
+                        >
+                            <CreditCard class="h-4 w-4" aria-hidden="true" />
+                            Bayar via Midtrans
+                        </PrimaryButton>
+                        <PrimaryButton v-else type="button" class="w-full" :disabled="isCreatingPayment" @click="createPayment">
+                            <CreditCard class="h-4 w-4" aria-hidden="true" />
+                            Buat Pembayaran
+                        </PrimaryButton>
                         <a
                             v-if="checkout.payment?.payment_url"
                             :href="checkout.payment.payment_url"
                             target="_blank"
                             rel="noopener noreferrer"
-                            class="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-transparent bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                            class="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-border bg-white px-4 py-2 text-sm font-semibold text-ink shadow-sm transition hover:bg-surface focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
                         >
                             <ExternalLink class="h-4 w-4" aria-hidden="true" />
-                            Bayar via Midtrans
+                            Buka Halaman Midtrans
                         </a>
-                        <PrimaryButton v-else type="button" class="w-full" :disabled="paymentForm.processing" @click="createPayment">
-                            <CreditCard class="h-4 w-4" aria-hidden="true" />
-                            Buat Pembayaran
-                        </PrimaryButton>
 
                         <SecondaryButton
                             type="button"
                             class="w-full"
-                            :disabled="refreshForm.processing || !checkout.payment"
+                            :disabled="isRefreshingStatus || !checkout.payment"
                             @click="refreshStatus"
                         >
                             <RefreshCw class="h-4 w-4" aria-hidden="true" />

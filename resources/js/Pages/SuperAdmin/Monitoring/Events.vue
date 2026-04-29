@@ -2,6 +2,7 @@
 import { Link, useForm } from '@inertiajs/vue3';
 import { ExternalLink, Search } from 'lucide-vue-next';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import DataTable from '@/Components/DataTable.vue';
 import EmptyState from '@/Components/EmptyState.vue';
 import FormSelect from '@/Components/FormSelect.vue';
@@ -77,7 +78,7 @@ const formatDate = (value) =>
         <template #header>
             <div>
                 <h1 class="font-heading text-xl font-semibold text-ink">Monitoring Event</h1>
-                <p class="mt-1 text-sm text-ink-muted">Pantau event dari semua fotografer, status publikasi, harga, dan volume data.</p>
+                <Breadcrumbs :items="[{ label: 'Dashboard', href: route('dashboard') }, { label: 'Monitoring Event' }]" />
             </div>
         </template>
 

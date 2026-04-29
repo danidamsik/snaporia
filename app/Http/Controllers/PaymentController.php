@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Contracts\PaymentGateway;
 use App\Models\Order;
 use App\Models\Transaction;
+use App\Services\PaymentTransactionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -15,57 +16,85 @@ use Throwable;
 
 class PaymentController extends Controller
 {
-    public function pay(Order $order, PaymentGateway $gateway): RedirectResponse
+    public function pay(Request $request, Order $order, PaymentTransactionService $payments): JsonResponse|RedirectResponse
     {
         $this->authorize('view', $order);
 
         if ($this->expireIfNeeded($order)) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Order sudah expired. Silakan buat order baru.',
+                    'order' => $this->orderPayload($order->refresh()),
+                ], 422);
+            }
+
             return redirect()
                 ->route('checkout.orders.show', $order)
                 ->with('warning', 'Order sudah expired. Silakan buat order baru.');
         }
 
         if ($order->status !== Order::STATUS_PENDING) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Order ini tidak lagi berstatus pending.',
+                    'order' => $this->orderPayload($order),
+                ], 422);
+            }
+
             return redirect()
                 ->route('checkout.orders.show', $order)
                 ->with('info', 'Order ini tidak lagi berstatus pending.');
         }
 
-        $existingTransaction = $order->transactions()->latest()->first();
-        if ($existingTransaction?->payment_url) {
-            return redirect()
-                ->route('checkout.orders.show', $order)
-                ->with('info', 'Link pembayaran Midtrans sudah tersedia.');
-        }
-
         try {
-            $payment = $gateway->createTransaction($order, $this->midtransOrderId($order));
-
-            Transaction::create($payment + [
-                'order_id' => $order->id,
-            ]);
+            $result = $payments->createOrReuse($order);
         } catch (Throwable $exception) {
             Log::error('Midtrans payment creation failed.', [
                 'order_id' => $order->id,
                 'message' => $exception->getMessage(),
             ]);
 
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Gagal membuat pembayaran Midtrans. Coba lagi beberapa saat.',
+                ], 502);
+            }
+
             return redirect()
                 ->route('checkout.orders.show', $order)
                 ->with('error', 'Gagal membuat pembayaran Midtrans. Coba lagi beberapa saat.');
         }
 
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => $result['created']
+                    ? 'Pembayaran Midtrans berhasil dibuat.'
+                    : 'Pembayaran Midtrans yang sudah tersedia digunakan kembali.',
+                'payment' => $this->paymentPayload($result['transaction']),
+                'order' => $this->orderPayload($order),
+            ]);
+        }
+
         return redirect()
             ->route('checkout.orders.show', $order)
-            ->with('success', 'Link pembayaran Midtrans berhasil dibuat.');
+            ->with($result['created'] ? 'success' : 'info', $result['created']
+                ? 'Link pembayaran Midtrans berhasil dibuat.'
+                : 'Link pembayaran Midtrans sudah tersedia.');
     }
 
-    public function refresh(Order $order, PaymentGateway $gateway): RedirectResponse
+    public function refresh(Request $request, Order $order, PaymentGateway $gateway): JsonResponse|RedirectResponse
     {
         $this->authorize('view', $order);
 
         $transaction = $order->transactions()->latest()->first();
         if (! $transaction) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Pembayaran belum dibuat untuk order ini.',
+                    'order' => $this->orderPayload($order),
+                ], 422);
+            }
+
             return redirect()
                 ->route('checkout.orders.show', $order)
                 ->with('warning', 'Pembayaran belum dibuat untuk order ini.');
@@ -80,9 +109,26 @@ class PaymentController extends Controller
                 'message' => $exception->getMessage(),
             ]);
 
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Status pembayaran belum bisa dicek. Coba lagi nanti.',
+                ], 502);
+            }
+
             return redirect()
                 ->route('checkout.orders.show', $order)
                 ->with('error', 'Status pembayaran belum bisa dicek. Coba lagi nanti.');
+        }
+
+        $transaction->refresh();
+        $order->refresh();
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'Status pembayaran diperbarui.',
+                'order' => $this->orderPayload($order),
+                'payment' => $this->paymentPayload($transaction),
+            ]);
         }
 
         return redirect()
@@ -247,8 +293,25 @@ class PaymentController extends Controller
         return false;
     }
 
-    private function midtransOrderId(Order $order): string
+    private function orderPayload(Order $order): array
     {
-        return 'MT-'.$order->order_code;
+        return [
+            'status' => $order->status,
+            'paid_at' => $order->paid_at?->toIso8601String(),
+            'expires_at' => $order->expires_at?->toIso8601String(),
+            'url' => route('checkout.orders.show', $order),
+        ];
+    }
+
+    private function paymentPayload(Transaction $transaction): array
+    {
+        return [
+            'status' => $transaction->status,
+            'snap_token' => $transaction->snap_token,
+            'payment_url' => $transaction->payment_url,
+            'payment_type' => $transaction->payment_type,
+            'gross_amount' => (float) $transaction->gross_amount,
+            'expires_at' => $transaction->expires_at?->toIso8601String(),
+        ];
     }
 }

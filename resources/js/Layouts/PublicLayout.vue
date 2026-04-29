@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
-import { Menu, Search, ShoppingBag, UserRound, X } from 'lucide-vue-next';
+import { LogOut, Menu, ShoppingBag, UserRound, X } from 'lucide-vue-next';
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 import Toast from '@/Components/Toast.vue';
 
@@ -14,6 +14,14 @@ const publicLinks = [
     { label: 'Galeri', href: '/gallery' },
 ];
 
+const visitorLinks = [
+    { label: 'Event', href: '/events' },
+    { label: 'Galeri', href: '/gallery' },
+    { label: 'Riwayat Pembelian', href: '/visitor/orders' },
+    { label: 'Profil', href: '/profile' },
+];
+
+const mainLinks = computed(() => (user.value?.role === 'visitor' ? visitorLinks : publicLinks));
 const isActive = (href) => page.url === href || page.url.startsWith(`${href}/`);
 </script>
 
@@ -28,7 +36,7 @@ const isActive = (href) => page.url === href || page.url.startsWith(`${href}/`);
 
                 <nav class="hidden items-center gap-1 md:flex" aria-label="Navigasi publik">
                     <Link
-                        v-for="item in publicLinks"
+                        v-for="item in mainLinks"
                         :key="item.href"
                         :href="item.href"
                         class="rounded-md px-3 py-2 text-sm font-semibold transition"
@@ -40,22 +48,28 @@ const isActive = (href) => page.url === href || page.url.startsWith(`${href}/`);
 
                 <div class="hidden items-center gap-2 md:flex">
                     <Link
-                        href="/events"
-                        class="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-white px-3 text-sm font-semibold text-ink hover:bg-surface"
-                    >
-                        <Search class="h-4 w-4" aria-hidden="true" />
-                        Cari Foto
-                    </Link>
-                    <Link
-                        v-if="user"
+                        v-if="user && user.role !== 'visitor'"
                         :href="route('dashboard')"
                         class="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-3 text-sm font-semibold text-white hover:bg-primary-hover"
                     >
                         <UserRound class="h-4 w-4" aria-hidden="true" />
                         Dashboard
                     </Link>
+                    <Link
+                        v-else-if="user"
+                        :href="route('logout')"
+                        method="post"
+                        as="button"
+                        class="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-3 text-sm font-semibold text-white hover:bg-primary-hover"
+                    >
+                        <LogOut class="h-4 w-4" aria-hidden="true" />
+                        Logout
+                    </Link>
                     <template v-else>
-                        <Link :href="route('login')" class="rounded-md px-3 py-2 text-sm font-semibold text-ink-muted hover:text-ink">
+                        <Link
+                            :href="route('login')"
+                            class="rounded-md px-3 py-2 text-sm font-semibold text-ink-muted hover:text-ink"
+                        >
                             Login
                         </Link>
                         <Link :href="route('register')" class="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-3 text-sm font-semibold text-white hover:bg-primary-hover">
@@ -80,7 +94,7 @@ const isActive = (href) => page.url === href || page.url.startsWith(`${href}/`);
             <div v-if="showingMenu" class="border-t border-border bg-white px-4 py-3 md:hidden">
                 <nav class="space-y-1" aria-label="Navigasi publik mobile">
                     <Link
-                        v-for="item in publicLinks"
+                        v-for="item in mainLinks"
                         :key="item.href"
                         :href="item.href"
                         class="block rounded-md px-3 py-2 text-sm font-semibold"
@@ -88,8 +102,28 @@ const isActive = (href) => page.url === href || page.url.startsWith(`${href}/`);
                     >
                         {{ item.label }}
                     </Link>
-                    <Link :href="user ? route('dashboard') : route('login')" class="block rounded-md px-3 py-2 text-sm font-semibold text-ink-muted hover:bg-surface hover:text-ink">
-                        {{ user ? 'Dashboard' : 'Login' }}
+                    <Link
+                        v-if="user && user.role !== 'visitor'"
+                        :href="route('dashboard')"
+                        class="block rounded-md px-3 py-2 text-sm font-semibold text-ink-muted hover:bg-surface hover:text-ink"
+                    >
+                        Dashboard
+                    </Link>
+                    <Link
+                        v-if="!user"
+                        :href="route('login')"
+                        class="block rounded-md px-3 py-2 text-sm font-semibold text-ink-muted hover:bg-surface hover:text-ink"
+                    >
+                        Login
+                    </Link>
+                    <Link
+                        v-if="user && user.role === 'visitor'"
+                        :href="route('logout')"
+                        method="post"
+                        as="button"
+                        class="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-primary hover:bg-indigo-50"
+                    >
+                        Logout
                     </Link>
                     <Link v-if="!user" :href="route('register')" class="block rounded-md px-3 py-2 text-sm font-semibold text-primary hover:bg-indigo-50">
                         Register

@@ -30,12 +30,12 @@ class MidtransPaymentTest extends TestCase
 
         $this->assertDatabaseHas('transactions', [
             'order_id' => $order->id,
-            'midtrans_order_id' => 'MT-'.$order->order_code,
             'snap_token' => 'snap-token-test',
             'payment_url' => 'https://app.sandbox.midtrans.com/snap/v2/vtweb/snap-token-test',
             'gross_amount' => 50000,
             'status' => 'pending',
         ]);
+        $this->assertStringStartsWith('MT-'.$order->order_code.'-'.$order->id.'-', Transaction::query()->firstOrFail()->midtrans_order_id);
     }
 
     public function test_existing_payment_link_is_reused(): void

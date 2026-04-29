@@ -6,14 +6,18 @@ use App\Models\Event;
 use App\Models\Order;
 use App\Models\Photo;
 use App\Models\Setting;
+use App\Services\PaymentTransactionService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use Throwable;
 
 class CheckoutController extends Controller
 {
@@ -41,13 +45,20 @@ class CheckoutController extends Controller
         ]);
     }
 
-    public function storeSingle(Request $request): RedirectResponse
+    public function storeSingle(Request $request, PaymentTransactionService $payments): JsonResponse|RedirectResponse
     {
         $photos = $this->validatedSinglePhotos($request);
         $event = $photos->first()->event;
 
         $duplicate = $this->findDuplicateSinglePurchase($request, $photos, $event);
         if ($duplicate) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Kamu sudah memiliki pembelian paid untuk foto atau paket ini.',
+                    'checkout' => $this->orderPayload($duplicate),
+                ], 409);
+            }
+
             return redirect()
                 ->route('checkout.orders.show', $duplicate)
                 ->with('warning', 'Kamu sudah memiliki pembelian paid untuk foto atau paket ini.');
@@ -73,6 +84,10 @@ class CheckoutController extends Controller
 
             return $order;
         });
+
+        if ($request->expectsJson()) {
+            return $this->createPaymentJson($order, $payments);
+        }
 
         return redirect()
             ->route('checkout.orders.show', $order)
@@ -101,12 +116,19 @@ class CheckoutController extends Controller
         ]);
     }
 
-    public function storePackage(Request $request, Event $event): RedirectResponse
+    public function storePackage(Request $request, Event $event, PaymentTransactionService $payments): JsonResponse|RedirectResponse
     {
         $photos = $this->validatedPackagePhotos($event);
 
         $duplicate = $this->findDuplicatePackagePurchase($request, $event);
         if ($duplicate) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Kamu sudah memiliki pembelian paid untuk paket event ini.',
+                    'checkout' => $this->orderPayload($duplicate),
+                ], 409);
+            }
+
             return redirect()
                 ->route('checkout.orders.show', $duplicate)
                 ->with('warning', 'Kamu sudah memiliki pembelian paid untuk paket event ini.');
@@ -133,6 +155,10 @@ class CheckoutController extends Controller
             return $order;
         });
 
+        if ($request->expectsJson()) {
+            return $this->createPaymentJson($order, $payments);
+        }
+
         return redirect()
             ->route('checkout.orders.show', $order)
             ->with('success', 'Order pending berhasil dibuat.');
@@ -142,44 +168,37 @@ class CheckoutController extends Controller
     {
         $this->authorize('view', $order);
 
-        $order->load(['event', 'items.photo']);
         if ($order->status === Order::STATUS_PENDING && $order->expires_at && $order->expires_at->isPast()) {
             $order->update(['status' => Order::STATUS_EXPIRED]);
-            $order->refresh()->load(['event', 'items.photo']);
+            $order->refresh();
         }
 
-        $transaction = $order->transactions()->latest()->first();
-
         return Inertia::render('Checkout/Show', [
-            'checkout' => [
-                'mode' => 'order',
-                'order_code' => $order->order_code,
-                'status' => $order->status,
-                'type' => $order->type,
-                'event' => $this->eventPayload($order->event),
-                'photos_count' => $order->items->count(),
-                'total_amount' => (float) $order->total_amount,
-                'expires_at' => $order->expires_at?->toIso8601String(),
-                'paid_at' => $order->paid_at?->toIso8601String(),
-                'pay_url' => route('payment.orders.pay', $order),
-                'refresh_url' => route('payment.orders.refresh', $order),
-                'payment' => $transaction ? [
-                    'status' => $transaction->status,
-                    'snap_token' => $transaction->snap_token,
-                    'payment_url' => $transaction->payment_url,
-                    'payment_type' => $transaction->payment_type,
-                    'gross_amount' => (float) $transaction->gross_amount,
-                    'expires_at' => $transaction->expires_at?->toIso8601String(),
-                ] : null,
-                'photos' => $order->items
-                    ->map(fn ($item) => [
-                        'id' => $item->photo->id,
-                        'filename' => $item->photo->filename,
-                        'price' => (float) $item->price,
-                    ])
-                    ->values(),
-            ],
+            'checkout' => $this->orderPayload($order),
         ]);
+    }
+
+    private function createPaymentJson(Order $order, PaymentTransactionService $payments): JsonResponse
+    {
+        try {
+            $result = $payments->createOrReuse($order);
+        } catch (Throwable $exception) {
+            Log::error('Midtrans payment creation failed after checkout order creation.', [
+                'order_id' => $order->id,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Order berhasil dibuat, tetapi pembayaran Midtrans belum bisa dibuka. Coba dari halaman detail order.',
+                'checkout' => $this->orderPayload($order),
+            ], 502);
+        }
+
+        return response()->json([
+            'message' => 'Order berhasil dibuat. Pembayaran Midtrans siap dibuka.',
+            'checkout' => $this->orderPayload($order),
+            'payment' => $this->paymentPayload($result['transaction']),
+        ], 201);
     }
 
     private function validatedSinglePhotos(Request $request): Collection
@@ -281,6 +300,7 @@ class CheckoutController extends Controller
             'expires_at' => $this->pendingExpiresAt()->toIso8601String(),
             'store_url' => $storeUrl,
             'photo_ids' => $photoIds,
+            'midtrans' => $this->midtransPayload(),
         ];
     }
 
@@ -294,6 +314,57 @@ class CheckoutController extends Controller
             'price_per_photo' => (float) $event->price_per_photo,
             'price_package' => (float) $event->price_package,
             'url' => route('events.show', $event),
+        ];
+    }
+
+    private function orderPayload(Order $order): array
+    {
+        $order->loadMissing(['event', 'items.photo']);
+        $transaction = $order->transactions()->latest()->first();
+
+        return [
+            'mode' => 'order',
+            'order_code' => $order->order_code,
+            'status' => $order->status,
+            'type' => $order->type,
+            'event' => $this->eventPayload($order->event),
+            'photos_count' => $order->items->count(),
+            'total_amount' => (float) $order->total_amount,
+            'expires_at' => $order->expires_at?->toIso8601String(),
+            'paid_at' => $order->paid_at?->toIso8601String(),
+            'pay_url' => route('payment.orders.pay', $order),
+            'refresh_url' => route('payment.orders.refresh', $order),
+            'payment' => $transaction ? $this->paymentPayload($transaction) : null,
+            'photos' => $order->items
+                ->map(fn ($item) => [
+                    'id' => $item->photo->id,
+                    'filename' => $item->photo->filename,
+                    'price' => (float) $item->price,
+                ])
+                ->values(),
+            'midtrans' => $this->midtransPayload(),
+        ];
+    }
+
+    private function paymentPayload($transaction): array
+    {
+        return [
+            'status' => $transaction->status,
+            'snap_token' => $transaction->snap_token,
+            'payment_url' => $transaction->payment_url,
+            'payment_type' => $transaction->payment_type,
+            'gross_amount' => (float) $transaction->gross_amount,
+            'expires_at' => $transaction->expires_at?->toIso8601String(),
+        ];
+    }
+
+    private function midtransPayload(): array
+    {
+        return [
+            'client_key' => config('midtrans.client_key'),
+            'snap_js_url' => config('midtrans.is_production')
+                ? 'https://app.midtrans.com/snap/snap.js'
+                : 'https://app.sandbox.midtrans.com/snap/snap.js',
         ];
     }
 

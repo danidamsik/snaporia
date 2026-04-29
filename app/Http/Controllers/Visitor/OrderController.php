@@ -56,6 +56,11 @@ class OrderController extends Controller
     {
         $this->authorize('view', $order);
 
+        if ($order->status === Order::STATUS_PENDING && $order->expires_at && $order->expires_at->isPast()) {
+            $order->update(['status' => Order::STATUS_EXPIRED]);
+            $order->refresh();
+        }
+
         $order->load('event:id,name,date,location,price_per_photo,price_package');
 
         $items = $order->items()
@@ -117,6 +122,8 @@ class OrderController extends Controller
 
     private function orderPayload(Order $order): array
     {
+        $transaction = $order->transactions()->latest()->first();
+
         return [
             'id' => $order->id,
             'order_code' => $order->order_code,
@@ -128,12 +135,38 @@ class OrderController extends Controller
             'created_at' => $order->created_at?->toIso8601String(),
             'items_count' => $order->items_count ?? $order->items()->count(),
             'url' => route('visitor.orders.show', $order),
+            'pay_url' => route('payment.orders.pay', $order),
+            'refresh_url' => route('payment.orders.refresh', $order),
+            'payment' => $transaction ? $this->paymentPayload($transaction) : null,
+            'midtrans' => $this->midtransPayload(),
             'event' => [
                 'id' => $order->event->id,
                 'name' => $order->event->name,
                 'date' => $order->event->date?->toDateString(),
                 'location' => $order->event->location,
             ],
+        ];
+    }
+
+    private function paymentPayload($transaction): array
+    {
+        return [
+            'status' => $transaction->status,
+            'snap_token' => $transaction->snap_token,
+            'payment_url' => $transaction->payment_url,
+            'payment_type' => $transaction->payment_type,
+            'gross_amount' => (float) $transaction->gross_amount,
+            'expires_at' => $transaction->expires_at?->toIso8601String(),
+        ];
+    }
+
+    private function midtransPayload(): array
+    {
+        return [
+            'client_key' => config('midtrans.client_key'),
+            'snap_js_url' => config('midtrans.is_production')
+                ? 'https://app.midtrans.com/snap/snap.js'
+                : 'https://app.sandbox.midtrans.com/snap/snap.js',
         ];
     }
 

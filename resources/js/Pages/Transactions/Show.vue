@@ -1,7 +1,8 @@
 <script setup>
 import { Link, router } from '@inertiajs/vue3';
-import { ArrowLeft, ExternalLink, Trash2 } from 'lucide-vue-next';
+import { ArrowLeft, Trash2 } from 'lucide-vue-next';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import DataTable from '@/Components/DataTable.vue';
 import IconButton from '@/Components/IconButton.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
@@ -69,7 +70,7 @@ const formatFileSize = (bytes) => {
         <template #header>
             <div>
                 <h1 class="font-heading text-xl font-semibold text-ink">Detail Transaksi</h1>
-                <p class="mt-1 text-sm text-ink-muted">{{ transaction.midtrans_order_id }}</p>
+                <Breadcrumbs :items="[{ label: 'Dashboard', href: route('dashboard') }, { label: 'Transaksi', href: backUrl }, { label: transaction.midtrans_order_id }]" />
             </div>
         </template>
 
@@ -150,16 +151,6 @@ const formatFileSize = (bytes) => {
                         </div>
                     </div>
 
-                    <a
-                        v-if="transaction.payment_url"
-                        :href="transaction.payment_url"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="mt-5 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-border bg-white px-4 py-2 text-sm font-semibold text-ink shadow-sm transition hover:bg-surface focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-                    >
-                        <ExternalLink class="h-4 w-4" aria-hidden="true" />
-                        Buka Payment URL
-                    </a>
                 </aside>
             </section>
 

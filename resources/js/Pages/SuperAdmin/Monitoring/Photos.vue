@@ -2,6 +2,7 @@
 import { useForm } from '@inertiajs/vue3';
 import { ImageOff, Search } from 'lucide-vue-next';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import EmptyState from '@/Components/EmptyState.vue';
 import FormSelect from '@/Components/FormSelect.vue';
 import Pagination from '@/Components/Pagination.vue';
@@ -71,7 +72,7 @@ const formatCurrency = (value) =>
         <template #header>
             <div>
                 <h1 class="font-heading text-xl font-semibold text-ink">Monitoring Foto</h1>
-                <p class="mt-1 text-sm text-ink-muted">Lihat foto watermark dari semua event dan fotografer tanpa membuka file original.</p>
+                <Breadcrumbs :items="[{ label: 'Dashboard', href: route('dashboard') }, { label: 'Monitoring Foto' }]" />
             </div>
         </template>
 

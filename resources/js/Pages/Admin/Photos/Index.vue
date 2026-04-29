@@ -2,6 +2,7 @@
 import { Link, router, useForm } from '@inertiajs/vue3';
 import { ImageOff, Search, Trash2, Upload } from 'lucide-vue-next';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import EmptyState from '@/Components/EmptyState.vue';
 import IconButton from '@/Components/IconButton.vue';
 import Pagination from '@/Components/Pagination.vue';
@@ -74,9 +75,7 @@ const deletePhoto = (photo) => {
         <template #header>
             <div>
                 <h1 class="font-heading text-xl font-semibold text-ink">Foto Saya</h1>
-                <p class="mt-1 text-sm text-ink-muted">
-                    {{ selectedEvent ? selectedEvent.name : 'Kelola foto dari semua event milik Anda.' }}
-                </p>
+                <Breadcrumbs :items="[{ label: 'Dashboard', href: route('dashboard') }, { label: 'Foto Saya' }, ...(selectedEvent ? [{ label: selectedEvent.name }] : [])]" />
             </div>
         </template>
 

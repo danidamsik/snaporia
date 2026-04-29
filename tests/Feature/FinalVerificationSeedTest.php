@@ -48,10 +48,10 @@ class FinalVerificationSeedTest extends TestCase
             'arka@snaporia.test' => route('admin.dashboard'),
             'lensa@snaporia.test' => route('admin.dashboard'),
             'momentika@snaporia.test' => route('admin.dashboard'),
-            'rani@example.test' => route('visitor.dashboard'),
-            'dimas@example.test' => route('visitor.dashboard'),
-            'sinta@example.test' => route('visitor.dashboard'),
-            'bima@example.test' => route('visitor.dashboard'),
+            'rani@example.test' => route('events.index'),
+            'dimas@example.test' => route('events.index'),
+            'sinta@example.test' => route('events.index'),
+            'bima@example.test' => route('events.index'),
         ];
 
         foreach ($expectations as $email => $redirect) {

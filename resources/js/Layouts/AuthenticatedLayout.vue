@@ -5,13 +5,10 @@ import {
     BarChart3,
     Camera,
     CreditCard,
-    Download,
-    FileText,
     Image,
     LayoutDashboard,
     Menu,
     Settings,
-    Upload,
     Users,
     X,
 } from 'lucide-vue-next';
@@ -37,20 +34,13 @@ const navByRole = {
     admin: [
         { label: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
         { label: 'Event Saya', href: '/admin/events', icon: Camera },
-        { label: 'Upload Foto', href: '/admin/photos/upload', icon: Upload },
         { label: 'Foto Saya', href: '/admin/photos', icon: Image },
         { label: 'Transaksi', href: '/admin/transactions', icon: CreditCard },
         { label: 'Laporan Penjualan', href: '/admin/reports/sales', icon: BarChart3 },
     ],
-    visitor: [
-        { label: 'Jelajah Event', href: '/events', icon: Camera },
-        { label: 'Riwayat Pembelian', href: '/visitor/orders', icon: FileText },
-        { label: 'Download Saya', href: '/visitor/downloads', icon: Download },
-        { label: 'Profil', href: '/profile', icon: Users },
-    ],
 };
 
-const navigation = computed(() => navByRole[user.value?.role] ?? navByRole.visitor);
+const navigation = computed(() => navByRole[user.value?.role] ?? []);
 const isActive = (href) => page.url === href || page.url.startsWith(`${href}/`);
 </script>
 

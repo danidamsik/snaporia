@@ -25,19 +25,23 @@ class AuthorizationTest extends TestCase
         $this->actingAs($superAdmin)->get('/admin/dashboard')->assertForbidden();
 
         $this->actingAs($admin)->get('/admin/dashboard')->assertOk();
-        $this->actingAs($admin)->get('/visitor/dashboard')->assertForbidden();
 
-        $this->actingAs($visitor)->get('/visitor/dashboard')->assertOk();
+        $this->actingAs($visitor)->get('/dashboard')->assertRedirect(route('events.index'));
         $this->actingAs($visitor)->get('/super-admin/dashboard')->assertForbidden();
     }
 
     public function test_dashboard_redirects_to_the_authenticated_users_role_dashboard(): void
     {
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $visitor = User::factory()->create(['role' => User::ROLE_VISITOR]);
 
         $this->actingAs($admin)
             ->get('/dashboard')
             ->assertRedirect(route('admin.dashboard'));
+
+        $this->actingAs($visitor)
+            ->get('/dashboard')
+            ->assertRedirect(route('events.index'));
     }
 
     public function test_inactive_authenticated_user_gets_forbidden_on_protected_routes(): void

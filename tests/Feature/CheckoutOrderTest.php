@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Contracts\PaymentGateway;
 use App\Models\Event;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Photo;
+use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -83,6 +85,56 @@ class CheckoutOrderTest extends TestCase
             'photo_id' => $secondPhoto->id,
             'price' => 25000,
         ]);
+    }
+
+    public function test_json_single_checkout_creates_order_and_midtrans_payment_without_redirect(): void
+    {
+        $this->app->instance(PaymentGateway::class, new class implements PaymentGateway
+        {
+            public function createTransaction(Order $order, string $midtransOrderId): array
+            {
+                return [
+                    'midtrans_order_id' => $midtransOrderId,
+                    'snap_token' => 'snap-token-checkout',
+                    'payment_url' => 'https://app.sandbox.midtrans.com/snap/v2/vtweb/snap-token-checkout',
+                    'payment_type' => null,
+                    'gross_amount' => $order->total_amount,
+                    'status' => 'pending',
+                    'fraud_status' => null,
+                    'expires_at' => $order->expires_at,
+                    'payload' => ['token' => 'snap-token-checkout'],
+                ];
+            }
+
+            public function status(Transaction $transaction): array
+            {
+                return [];
+            }
+        });
+
+        $visitor = User::factory()->create(['role' => User::ROLE_VISITOR]);
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $event = $this->makeEvent($admin, ['price_per_photo' => 25000]);
+        $photo = $this->makePhoto($event, ['filename' => 'wisuda-001.jpg']);
+
+        $this->actingAs($visitor)
+            ->postJson(route('checkout.single.store'), [
+                'photos' => [$photo->id],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('checkout.mode', 'order')
+            ->assertJsonPath('checkout.status', Order::STATUS_PENDING)
+            ->assertJsonPath('payment.snap_token', 'snap-token-checkout');
+
+        $order = Order::query()->firstOrFail();
+
+        $this->assertDatabaseHas('transactions', [
+            'order_id' => $order->id,
+            'snap_token' => 'snap-token-checkout',
+            'status' => 'pending',
+        ]);
+
+        $this->assertStringStartsWith('MT-'.$order->order_code.'-'.$order->id.'-', Transaction::query()->firstOrFail()->midtrans_order_id);
     }
 
     public function test_package_checkout_creates_pending_order_for_all_event_photos(): void
