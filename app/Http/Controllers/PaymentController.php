@@ -72,7 +72,7 @@ class PaymentController extends Controller
         }
 
         try {
-            $this->applyPaymentPayload($transaction, $gateway->status($transaction));
+            $this->applyPaymentPayload($transaction, $gateway->status($transaction), 'status_refresh');
         } catch (Throwable $exception) {
             Log::warning('Midtrans status refresh failed.', [
                 'order_id' => $order->id,
@@ -126,14 +126,21 @@ class PaymentController extends Controller
             return response()->json(['message' => 'Invalid amount.'], 422);
         }
 
-        $this->applyPaymentPayload($transaction, $payload);
+        Log::info('Midtrans payment callback accepted.', [
+            'transaction_id' => $transaction->id,
+            'order_id' => $transaction->order_id,
+            'midtrans_order_id' => $midtransOrderId,
+            'transaction_status' => $payload['transaction_status'] ?? null,
+        ]);
+
+        $this->applyPaymentPayload($transaction, $payload, 'midtrans_notification');
 
         return response()->json(['message' => 'OK']);
     }
 
-    private function applyPaymentPayload(Transaction $transaction, array $payload): void
+    private function applyPaymentPayload(Transaction $transaction, array $payload, string $source): void
     {
-        DB::transaction(function () use ($transaction, $payload): void {
+        DB::transaction(function () use ($transaction, $payload, $source): void {
             $transaction = Transaction::query()
                 ->whereKey($transaction->id)
                 ->lockForUpdate()
@@ -152,6 +159,8 @@ class PaymentController extends Controller
 
             $transactionStatus = (string) ($payload['transaction_status'] ?? $transaction->status);
             $mappedStatus = $this->mapOrderStatus($transactionStatus);
+            $previousTransactionStatus = $transaction->status;
+            $previousOrderStatus = $order->status;
 
             $transaction->update([
                 'midtrans_transaction_id' => $payload['transaction_id'] ?? $transaction->midtrans_transaction_id,
@@ -162,23 +171,36 @@ class PaymentController extends Controller
                 'payload' => $payload,
             ]);
 
-            if ($order->status === Order::STATUS_PAID) {
-                return;
-            }
+            $nextOrderStatus = $order->status;
 
-            if ($mappedStatus === Order::STATUS_PAID) {
+            if ($order->status === Order::STATUS_PAID) {
+                $nextOrderStatus = $order->status;
+            } elseif ($mappedStatus === Order::STATUS_PAID) {
                 $order->update([
                     'status' => Order::STATUS_PAID,
                     'paid_at' => now(),
                 ]);
 
-                return;
-            }
-
-            if (in_array($mappedStatus, [Order::STATUS_FAILED, Order::STATUS_EXPIRED], true)) {
+                $nextOrderStatus = Order::STATUS_PAID;
+            } elseif (in_array($mappedStatus, [Order::STATUS_FAILED, Order::STATUS_EXPIRED], true)) {
                 $order->update([
                     'status' => $mappedStatus,
                     'paid_at' => null,
+                ]);
+
+                $nextOrderStatus = $mappedStatus;
+            }
+
+            if ($previousTransactionStatus !== $transactionStatus || $previousOrderStatus !== $nextOrderStatus) {
+                Log::info('Transaction status changed.', [
+                    'source' => $source,
+                    'transaction_id' => $transaction->id,
+                    'order_id' => $order->id,
+                    'midtrans_order_id' => $transaction->midtrans_order_id,
+                    'previous_transaction_status' => $previousTransactionStatus,
+                    'transaction_status' => $transactionStatus,
+                    'previous_order_status' => $previousOrderStatus,
+                    'order_status' => $nextOrderStatus,
                 ]);
             }
         });

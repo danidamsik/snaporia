@@ -18,8 +18,6 @@ return new class extends Migration
             $table->string('mime_type', 100);
             $table->unsignedInteger('sort_order')->default(0);
             $table->timestamps();
-
-            $table->index('event_id');
         });
     }
 

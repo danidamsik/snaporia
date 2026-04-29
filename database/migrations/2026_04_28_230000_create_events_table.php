@@ -19,8 +19,6 @@ return new class extends Migration
             $table->decimal('price_package', 10, 2);
             $table->boolean('is_published')->default(false)->index();
             $table->timestamps();
-
-            $table->index('admin_id');
         });
     }
 

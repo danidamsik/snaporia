@@ -22,8 +22,6 @@ return new class extends Migration
             $table->timestamp('expires_at')->nullable();
             $table->json('payload')->nullable();
             $table->timestamps();
-
-            $table->index('order_id');
         });
     }
 

@@ -19,9 +19,6 @@ return new class extends Migration
             $table->timestamp('expires_at')->nullable();
             $table->timestamp('paid_at')->nullable();
             $table->timestamps();
-
-            $table->index('user_id');
-            $table->index('event_id');
         });
     }
 

@@ -14,9 +14,6 @@ return new class extends Migration
             $table->foreignId('photo_id')->constrained('photos')->restrictOnDelete();
             $table->decimal('price', 10, 2);
             $table->timestamp('created_at')->nullable();
-
-            $table->index('order_id');
-            $table->index('photo_id');
         });
     }
 

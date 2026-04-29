@@ -11,6 +11,8 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PublicEventController;
 use App\Http\Controllers\PublicGalleryController;
 use App\Http\Controllers\PublicPhotoController;
+use App\Http\Controllers\SuperAdmin\EventMonitoringController as SuperAdminEventMonitoringController;
+use App\Http\Controllers\SuperAdmin\PhotoMonitoringController as SuperAdminPhotoMonitoringController;
 use App\Http\Controllers\SuperAdmin\SettingController as SuperAdminSettingController;
 use App\Http\Controllers\SuperAdmin\TransactionController as SuperAdminTransactionController;
 use App\Http\Controllers\SuperAdmin\UserManagementController;
@@ -60,6 +62,10 @@ Route::middleware(['auth', 'active', 'verified'])->group(function () {
         Route::put('/users/{user}', [UserManagementController::class, 'update'])->name('users.update');
         Route::patch('/users/{user}/deactivate', [UserManagementController::class, 'deactivate'])->name('users.deactivate');
         Route::delete('/users/{user}', [UserManagementController::class, 'destroy'])->name('users.destroy');
+
+        Route::get('/events', [SuperAdminEventMonitoringController::class, 'index'])->name('events.index');
+        Route::get('/photos', [SuperAdminPhotoMonitoringController::class, 'index'])->name('photos.index');
+        Route::get('/photos/{photo}/preview', [SuperAdminPhotoMonitoringController::class, 'preview'])->name('photos.preview');
 
         Route::get('/transactions', [SuperAdminTransactionController::class, 'index'])->name('transactions.index');
         Route::get('/transactions/{transaction}', [SuperAdminTransactionController::class, 'show'])->name('transactions.show');
