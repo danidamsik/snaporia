@@ -21,11 +21,16 @@ const formErrors = ref({});
 const isSubmittingOrder = ref(false);
 const isCreatingPayment = ref(false);
 const isRefreshingStatus = ref(false);
+const isSnapInView = ref(false);
 let snapLoader = null;
 
 const isPreview = computed(() => checkout.value.mode === 'preview');
 const isSingle = computed(() => checkout.value.type === 'single');
 const typeLabel = computed(() => (isSingle.value ? 'Foto Satuan' : 'Paket Event'));
+const pricing = computed(() => checkout.value.pricing ?? {});
+const hasPackageCredit = computed(() => checkout.value.type === 'package' && Number(pricing.value.single_purchase_credit ?? 0) > 0);
+const packagePrice = computed(() => Number(pricing.value.package_price ?? checkout.value.total_amount ?? 0));
+const purchasedCreditPhotos = computed(() => pricing.value.purchased_photos ?? []);
 
 const toast = (type, title, message = '') => {
     window.dispatchEvent(
@@ -58,11 +63,14 @@ const submit = async () => {
 
         checkout.value = data.checkout;
         toast('success', data.message ?? 'Order berhasil dibuat.');
-        const snapResult = await snapPromise;
-        if (snapResult.error) {
-            toast('error', 'Modal Midtrans belum bisa dibuka.', snapResult.error.message);
-        } else {
-            payWithSnap(snapResult.snap, data.payment?.snap_token ?? data.checkout?.payment?.snap_token);
+        const snapToken = data.payment?.snap_token ?? data.checkout?.payment?.snap_token;
+        if (snapToken) {
+            const snapResult = await snapPromise;
+            if (snapResult.error) {
+                toast('error', 'Modal Midtrans belum bisa dibuka.', snapResult.error.message);
+            } else {
+                payWithSnap(snapResult.snap, snapToken);
+            }
         }
     } catch (error) {
         handleCheckoutError(error);
@@ -163,22 +171,37 @@ const payWithSnap = (snap, snapToken) => {
         return;
     }
 
-    snap.pay(snapToken, {
-        onSuccess: async () => {
-            toast('success', 'Pembayaran berhasil diproses.');
-            await refreshStatus({ silent: true });
-        },
-        onPending: async () => {
-            toast('info', 'Pembayaran masih menunggu konfirmasi.');
-            await refreshStatus({ silent: true });
-        },
-        onError: () => {
-            toast('error', 'Pembayaran gagal diproses.');
-        },
-        onClose: () => {
-            toast('info', 'Modal pembayaran ditutup.');
-        },
-    });
+    if (isSnapInView.value) {
+        toast('info', 'Modal Midtrans masih terbuka.');
+        return;
+    }
+
+    isSnapInView.value = true;
+
+    try {
+        snap.pay(snapToken, {
+            onSuccess: async () => {
+                isSnapInView.value = false;
+                toast('success', 'Pembayaran berhasil diproses.');
+                await refreshStatus({ silent: true });
+            },
+            onPending: async () => {
+                isSnapInView.value = false;
+                toast('info', 'Pembayaran masih menunggu konfirmasi.');
+                await refreshStatus({ silent: true });
+            },
+            onError: () => {
+                isSnapInView.value = false;
+                toast('error', 'Pembayaran gagal diproses.');
+            },
+            onClose: () => {
+                isSnapInView.value = false;
+            },
+        });
+    } catch (error) {
+        isSnapInView.value = false;
+        toast('error', 'Modal Midtrans belum bisa dibuka.', error.message);
+    }
 };
 
 const loadSnap = () => {
@@ -350,8 +373,12 @@ onMounted(() => {
                 <h2 class="font-heading text-lg font-semibold text-ink">Total</h2>
                 <div class="mt-4 space-y-3 text-sm">
                     <div class="flex items-center justify-between gap-3">
-                        <span class="text-ink-muted">Subtotal</span>
-                        <span class="font-semibold text-ink">{{ formatCurrency(checkout.total_amount) }}</span>
+                        <span class="text-ink-muted">{{ checkout.type === 'package' ? 'Harga paket' : 'Subtotal' }}</span>
+                        <span class="font-semibold text-ink">{{ formatCurrency(checkout.type === 'package' ? packagePrice : checkout.total_amount) }}</span>
+                    </div>
+                    <div v-if="hasPackageCredit" class="flex items-center justify-between gap-3">
+                        <span class="text-ink-muted">Foto yang sudah dibeli</span>
+                        <span class="font-semibold text-green-700">-{{ formatCurrency(pricing.single_purchase_credit) }}</span>
                     </div>
                     <div class="flex items-center justify-between gap-3 border-t border-border pt-3">
                         <span class="text-ink-muted">Total bayar</span>
@@ -359,9 +386,27 @@ onMounted(() => {
                     </div>
                 </div>
 
+                <div v-if="hasPackageCredit" class="mt-4 rounded-md border border-green-200 bg-green-50 p-3 text-sm">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <p class="font-semibold text-green-900">Foto yang sudah dibeli dalam event ini</p>
+                            <p class="mt-1 text-xs text-green-800">
+                                {{ pricing.purchased_photos_count }} foto menjadi potongan paket.
+                            </p>
+                        </div>
+                        <span class="shrink-0 font-semibold text-green-900">-{{ formatCurrency(pricing.single_purchase_credit) }}</span>
+                    </div>
+                    <div class="mt-3 divide-y divide-green-200">
+                        <div v-for="photo in purchasedCreditPhotos" :key="photo.id" class="flex items-center justify-between gap-3 py-2">
+                            <span class="min-w-0 truncate text-green-950">{{ photo.filename }}</span>
+                            <span class="shrink-0 text-green-800">-{{ formatCurrency(photo.price) }}</span>
+                        </div>
+                    </div>
+                </div>
+
                 <form v-if="isPreview" class="mt-5" @submit.prevent="submit">
                     <InputError class="mb-3" :message="formErrors.photos?.[0] || formErrors.event?.[0]" />
-                    <PrimaryButton type="submit" class="w-full" :disabled="isSubmittingOrder">
+                    <PrimaryButton type="submit" class="w-full" :disabled="isSubmittingOrder || isSnapInView">
                         <CreditCard class="h-4 w-4" aria-hidden="true" />
                         Buat Order & Bayar
                     </PrimaryButton>
@@ -373,13 +418,13 @@ onMounted(() => {
                             v-if="checkout.payment?.snap_token"
                             type="button"
                             class="w-full"
-                            :disabled="isCreatingPayment"
+                            :disabled="isCreatingPayment || isSnapInView"
                             @click="openSnap(checkout.payment.snap_token)"
                         >
                             <CreditCard class="h-4 w-4" aria-hidden="true" />
                             Bayar via Midtrans
                         </PrimaryButton>
-                        <PrimaryButton v-else type="button" class="w-full" :disabled="isCreatingPayment" @click="createPayment">
+                        <PrimaryButton v-else type="button" class="w-full" :disabled="isCreatingPayment || isSnapInView" @click="createPayment">
                             <CreditCard class="h-4 w-4" aria-hidden="true" />
                             Buat Pembayaran
                         </PrimaryButton>

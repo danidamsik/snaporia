@@ -6,6 +6,7 @@ use App\Models\Event;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Photo;
+use App\Models\Setting;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -87,6 +88,37 @@ class DashboardRoleTest extends TestCase
                 ->where('recentTransactions.0.id', $ownedTransaction->id)
                 ->has('recentEvents', 1)
                 ->where('recentEvents.0.name', 'Owned Event')
+            );
+    }
+
+    public function test_dashboard_recent_table_limit_uses_super_admin_setting(): void
+    {
+        Setting::create([
+            'key' => 'dashboard_table_per_page',
+            'value' => '2',
+            'description' => 'Fixture setting',
+        ]);
+
+        $superAdmin = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $visitor = User::factory()->create(['role' => User::ROLE_VISITOR]);
+
+        for ($index = 1; $index <= 3; $index++) {
+            $event = $this->makeEvent($admin, ['name' => "Event {$index}"]);
+            $order = $this->makeOrder($visitor, $event, [
+                'order_code' => "SNP-DASH-LIMIT-{$index}",
+                'status' => Order::STATUS_PAID,
+                'paid_at' => now(),
+            ]);
+            $this->makeTransaction($order, "MT-SNP-DASH-LIMIT-{$index}");
+        }
+
+        $this->actingAs($superAdmin)
+            ->get(route('super-admin.dashboard'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('recentTransactions', 2)
+                ->has('recentEvents', 2)
             );
     }
 

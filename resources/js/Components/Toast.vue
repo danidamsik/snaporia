@@ -20,6 +20,7 @@ const styles = {
     warning: 'border-amber-200 bg-amber-50 text-amber-800',
     info: 'border-cyan-200 bg-cyan-50 text-cyan-800',
 };
+const toastFlashTypes = ['success', 'error', 'warning', 'info'];
 
 const addToast = (detail) => {
     const id = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
@@ -43,7 +44,9 @@ const addToast = (detail) => {
 const handleToastEvent = (event) => addToast(event.detail ?? {});
 
 const flashEntries = computed(() =>
-    Object.entries(page.props.flash ?? {}).filter(([, value]) => Boolean(value))
+    toastFlashTypes
+        .map((type) => [type, page.props.flash?.[type]])
+        .filter(([, value]) => Boolean(value))
 );
 
 watch(

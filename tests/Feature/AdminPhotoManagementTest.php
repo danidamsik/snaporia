@@ -6,6 +6,7 @@ use App\Models\Event;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Photo;
+use App\Models\Setting;
 use App\Models\User;
 use App\Services\WatermarkService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -62,12 +63,49 @@ class AdminPhotoManagementTest extends TestCase
             );
     }
 
+    public function test_admin_photo_upload_uses_super_admin_upload_and_watermark_settings(): void
+    {
+        Storage::fake('local');
+
+        Setting::create(['key' => 'upload_max_file_size_mb', 'value' => '10', 'description' => 'Fixture setting']);
+        Setting::create(['key' => 'upload_max_files_per_batch', 'value' => '3', 'description' => 'Fixture setting']);
+        Setting::create(['key' => 'watermark_text', 'value' => 'Studio Mark', 'description' => 'Fixture setting']);
+        Setting::create(['key' => 'watermark_opacity', 'value' => '40', 'description' => 'Fixture setting']);
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $event = $this->makeEvent($admin);
+
+        $this->actingAs($admin)
+            ->get(route('admin.photos.upload'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('limits.max_file_size_mb', 10)
+                ->where('limits.max_files_per_batch', 3)
+            );
+
+        $this->mock(WatermarkService::class, function ($mock): void {
+            $mock->shouldReceive('createPreview')
+                ->once()
+                ->with(\Mockery::type('string'), \Mockery::type('string'), 'Studio Mark', 40);
+        });
+
+        $this->actingAs($admin)
+            ->post(route('admin.photos.store'), [
+                'event_id' => $event->id,
+                'photos' => [
+                    UploadedFile::fake()->image('configured.jpg', 800, 600),
+                ],
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success', '1 foto berhasil diupload, 0 foto gagal.');
+    }
+
     public function test_admin_can_bulk_upload_photos_to_owned_event(): void
     {
         Storage::fake('local');
 
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
-        $event = $this->makeEvent($admin);
+        $event = $this->makeEvent($admin, ['name' => 'Pesta Pora']);
 
         $this->actingAs($admin)
             ->post(route('admin.photos.store'), [
@@ -82,6 +120,16 @@ class AdminPhotoManagementTest extends TestCase
             ->assertSessionHas('upload_result.success_count', 2);
 
         $this->assertDatabaseCount('photos', 2);
+        $this->assertDatabaseHas('photos', [
+            'event_id' => $event->id,
+            'filename' => 'pesta pora-01.jpg',
+            'sort_order' => 1,
+        ]);
+        $this->assertDatabaseHas('photos', [
+            'event_id' => $event->id,
+            'filename' => 'pesta pora-02.png',
+            'sort_order' => 2,
+        ]);
         Photo::all()->each(function (Photo $photo) use ($event): void {
             $this->assertSame($event->id, $photo->event_id);
             Storage::disk('local')->assertExists($photo->original_path);

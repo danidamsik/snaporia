@@ -1,9 +1,11 @@
 <script setup>
 import { Link, router, useForm } from '@inertiajs/vue3';
 import { Edit, Plus, Search, Trash2, UserX } from 'lucide-vue-next';
+import { ref } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import DataTable from '@/Components/DataTable.vue';
+import DeleteConfirmationModal from '@/Components/DeleteConfirmationModal.vue';
 import EmptyState from '@/Components/EmptyState.vue';
 import FormSelect from '@/Components/FormSelect.vue';
 import IconButton from '@/Components/IconButton.vue';
@@ -37,6 +39,8 @@ const form = useForm({
     status: props.filters.status ?? '',
     q: props.filters.q ?? '',
 });
+const userToDelete = ref(null);
+const deleteProcessing = ref(false);
 
 const submit = () => {
     form.get(route('super-admin.users.index'), {
@@ -53,12 +57,30 @@ const deactivateUser = (user) => {
     router.patch(route('super-admin.users.deactivate', user.id), {}, { preserveScroll: true });
 };
 
-const deleteUser = (user) => {
-    if (!confirm(`Hapus akun ${user.name}?`)) {
+const confirmDeleteUser = (user) => {
+    userToDelete.value = user;
+};
+
+const closeDeleteModal = () => {
+    if (!deleteProcessing.value) {
+        userToDelete.value = null;
+    }
+};
+
+const deleteUser = () => {
+    if (!userToDelete.value) {
         return;
     }
 
-    router.delete(route('super-admin.users.destroy', user.id), { preserveScroll: true });
+    deleteProcessing.value = true;
+
+    router.delete(route('super-admin.users.destroy', userToDelete.value.id), {
+        preserveScroll: true,
+        onFinish: () => {
+            deleteProcessing.value = false;
+            userToDelete.value = null;
+        },
+    });
 };
 </script>
 
@@ -151,7 +173,7 @@ const deleteUser = (user) => {
                         <IconButton v-if="row.can_deactivate" label="Nonaktifkan user" @click="deactivateUser(row)">
                             <UserX class="h-4 w-4" aria-hidden="true" />
                         </IconButton>
-                        <IconButton v-if="row.can_delete" label="Hapus user" variant="danger" @click="deleteUser(row)">
+                        <IconButton v-if="row.can_delete" label="Hapus user" variant="danger" @click="confirmDeleteUser(row)">
                             <Trash2 class="h-4 w-4" aria-hidden="true" />
                         </IconButton>
                         <span v-if="!row.can_edit && !row.can_deactivate && !row.can_delete" class="text-sm text-ink-muted">
@@ -163,5 +185,15 @@ const deleteUser = (user) => {
 
             <Pagination :links="users.links" />
         </div>
+
+        <DeleteConfirmationModal
+            :show="Boolean(userToDelete)"
+            title="Hapus user?"
+            :message="`Akun ${userToDelete?.name ?? ''} akan dihapus permanen dari sistem.`"
+            confirm-label="Hapus User"
+            :processing="deleteProcessing"
+            @close="closeDeleteModal"
+            @confirm="deleteUser"
+        />
     </AuthenticatedLayout>
 </template>

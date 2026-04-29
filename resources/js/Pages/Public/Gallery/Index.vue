@@ -1,8 +1,10 @@
 <script setup>
+import { ref } from 'vue';
 import { useForm, Link } from '@inertiajs/vue3';
-import { CalendarDays, Image, MapPin, Search, ShoppingCart } from 'lucide-vue-next';
+import { CalendarDays, CheckCircle2, Eye, Image, MapPin, Search, ShoppingCart } from 'lucide-vue-next';
 import EmptyState from '@/Components/EmptyState.vue';
 import Pagination from '@/Components/Pagination.vue';
+import PhotoPreviewModal from '@/Components/PhotoPreviewModal.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import PublicLayout from '@/Layouts/PublicLayout.vue';
 import TextInput from '@/Components/TextInput.vue';
@@ -21,12 +23,17 @@ const props = defineProps({
 const form = useForm({
     q: props.filters.q ?? '',
 });
+const previewPhoto = ref(null);
 
 const submit = () => {
     form.get(route('gallery.index'), {
         preserveState: true,
         preserveScroll: true,
     });
+};
+
+const openPreview = (photo) => {
+    previewPhoto.value = photo;
 };
 
 const formatCurrency = (value) =>
@@ -65,14 +72,24 @@ const formatDate = (value) =>
 
             <div v-if="photos.data.length" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 <article v-for="photo in photos.data" :key="photo.id" class="overflow-hidden rounded-lg border border-border bg-white shadow-sm">
-                    <Link :href="photo.event.url" class="block aspect-[4/3] bg-surface">
-                        <img
-                            :src="photo.watermarked_url"
-                            :alt="photo.filename"
-                            class="h-full w-full object-cover"
-                            loading="lazy"
-                        />
-                    </Link>
+                    <div class="relative aspect-[4/3] bg-surface">
+                        <Link :href="photo.event.url" class="block h-full w-full">
+                            <img
+                                :src="photo.preview_url ?? photo.watermarked_url"
+                                :alt="photo.filename"
+                                class="h-full w-full object-contain"
+                                loading="lazy"
+                            />
+                        </Link>
+                        <button
+                            type="button"
+                            class="absolute right-3 top-3 inline-flex h-10 w-10 items-center justify-center rounded-md border border-white/70 bg-white/90 text-ink shadow-sm transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                            aria-label="Preview foto"
+                            @click="openPreview(photo)"
+                        >
+                            <Eye class="h-4 w-4" aria-hidden="true" />
+                        </button>
+                    </div>
                     <div class="p-3">
                         <p class="truncate text-sm font-semibold text-ink">{{ photo.filename }}</p>
                         <Link :href="photo.event.url" class="mt-1 block truncate text-sm font-semibold text-primary hover:text-primary-hover">
@@ -90,7 +107,15 @@ const formatDate = (value) =>
                         </div>
                         <div class="mt-3 flex items-center justify-between gap-2">
                             <p class="text-sm font-semibold text-ink">{{ formatCurrency(photo.event.price_per_photo) }}</p>
+                            <span
+                                v-if="photo.is_purchased"
+                                class="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-surface px-4 py-2 text-sm font-semibold text-ink-muted"
+                            >
+                                <CheckCircle2 class="h-4 w-4" aria-hidden="true" />
+                                Sudah dibeli
+                            </span>
                             <Link
+                                v-else
                                 :href="photo.checkout_url"
                                 class="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-transparent bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
                             >
@@ -114,5 +139,11 @@ const formatDate = (value) =>
 
             <Pagination class="mt-6" :links="photos.links" />
         </section>
+
+        <PhotoPreviewModal
+            :photo="previewPhoto"
+            :price="previewPhoto?.event?.price_per_photo ?? 0"
+            @close="previewPhoto = null"
+        />
     </PublicLayout>
 </template>

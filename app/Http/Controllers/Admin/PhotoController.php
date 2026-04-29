@@ -98,8 +98,9 @@ class PhotoController extends Controller
 
         foreach ($request->file('photos', []) as $file) {
             $originalClientName = $file->getClientOriginalName();
-            $safeBaseName = Str::slug(pathinfo($originalClientName, PATHINFO_FILENAME)) ?: 'photo';
             $extension = strtolower($file->getClientOriginalExtension());
+            $displayName = $this->photoFilename($event->name, $nextSortOrder, $extension);
+            $safeBaseName = Str::slug(pathinfo($displayName, PATHINFO_FILENAME)) ?: 'photo';
             $uniqueName = $safeBaseName.'-'.Str::ulid().'.'.$extension;
             $watermarkedName = pathinfo($uniqueName, PATHINFO_FILENAME).'.jpg';
             $originalPath = "photos/original/{$event->admin_id}/{$event->id}/{$uniqueName}";
@@ -113,14 +114,14 @@ class PhotoController extends Controller
                     'event_id' => $event->id,
                     'original_path' => $originalPath,
                     'watermarked_path' => $watermarkedPath,
-                    'filename' => $originalClientName,
+                    'filename' => $displayName,
                     'file_size' => $file->getSize(),
                     'mime_type' => $file->getMimeType(),
                     'sort_order' => $nextSortOrder++,
                 ]);
 
                 $result['success_count']++;
-                $result['success_files'][] = $originalClientName;
+                $result['success_files'][] = $displayName;
             } catch (Throwable $exception) {
                 Storage::disk('local')->delete([$originalPath, $watermarkedPath]);
                 $result['failed_count']++;
@@ -211,5 +212,17 @@ class PhotoController extends Controller
     private function uploadMessage(array $result): string
     {
         return "{$result['success_count']} foto berhasil diupload, {$result['failed_count']} foto gagal.";
+    }
+
+    private function photoFilename(string $eventName, int $sortOrder, string $extension): string
+    {
+        $baseName = (string) Str::of($eventName)
+            ->lower()
+            ->replaceMatches('/[\\\\\/:*?"<>|]+/', '')
+            ->replaceMatches('/\s+/', ' ')
+            ->trim();
+        $baseName = $baseName ?: 'event';
+
+        return sprintf('%s-%02d.%s', $baseName, $sortOrder, $extension);
     }
 }

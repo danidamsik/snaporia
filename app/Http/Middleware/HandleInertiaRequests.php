@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Setting;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -34,6 +35,7 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user(),
             ],
+            'app' => fn () => $this->appSettings(),
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
@@ -41,6 +43,18 @@ class HandleInertiaRequests extends Middleware
                 'info' => fn () => $request->session()->get('info'),
                 'upload_result' => fn () => $request->session()->get('upload_result'),
             ],
+        ];
+    }
+
+    private function appSettings(): array
+    {
+        $settings = Setting::query()
+            ->whereIn('key', ['site_name', 'site_tagline'])
+            ->pluck('value', 'key');
+
+        return [
+            'name' => (string) ($settings['site_name'] ?? 'Snaporia'),
+            'tagline' => (string) ($settings['site_tagline'] ?? 'Find Your Moments.'),
         ];
     }
 }

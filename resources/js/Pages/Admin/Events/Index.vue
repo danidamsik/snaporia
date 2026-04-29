@@ -1,9 +1,11 @@
 <script setup>
 import { Link, router, useForm } from '@inertiajs/vue3';
 import { Edit, Eye, EyeOff, Plus, Search, Trash2 } from 'lucide-vue-next';
+import { ref } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import DataTable from '@/Components/DataTable.vue';
+import DeleteConfirmationModal from '@/Components/DeleteConfirmationModal.vue';
 import EmptyState from '@/Components/EmptyState.vue';
 import FormSelect from '@/Components/FormSelect.vue';
 import IconButton from '@/Components/IconButton.vue';
@@ -35,6 +37,8 @@ const form = useForm({
     status: props.filters.status ?? '',
     q: props.filters.q ?? '',
 });
+const eventToDelete = ref(null);
+const deleteProcessing = ref(false);
 
 const submit = () => {
     form.get(route('admin.events.index'), {
@@ -67,12 +71,30 @@ const unpublishEvent = (event) => {
     router.patch(route('admin.events.unpublish', event.id), {}, { preserveScroll: true });
 };
 
-const deleteEvent = (event) => {
-    if (!confirm(`Hapus event ${event.name}?`)) {
+const confirmDeleteEvent = (event) => {
+    eventToDelete.value = event;
+};
+
+const closeDeleteModal = () => {
+    if (!deleteProcessing.value) {
+        eventToDelete.value = null;
+    }
+};
+
+const deleteEvent = () => {
+    if (!eventToDelete.value) {
         return;
     }
 
-    router.delete(route('admin.events.destroy', event.id), { preserveScroll: true });
+    deleteProcessing.value = true;
+
+    router.delete(route('admin.events.destroy', eventToDelete.value.id), {
+        preserveScroll: true,
+        onFinish: () => {
+            deleteProcessing.value = false;
+            eventToDelete.value = null;
+        },
+    });
 };
 </script>
 
@@ -164,7 +186,7 @@ const deleteEvent = (event) => {
                             <EyeOff class="h-4 w-4" aria-hidden="true" />
                         </IconButton>
 
-                        <IconButton v-if="row.can_delete" label="Hapus event" variant="danger" @click="deleteEvent(row)">
+                        <IconButton v-if="row.can_delete" label="Hapus event" variant="danger" @click="confirmDeleteEvent(row)">
                             <Trash2 class="h-4 w-4" aria-hidden="true" />
                         </IconButton>
                     </div>
@@ -173,5 +195,15 @@ const deleteEvent = (event) => {
 
             <Pagination :links="events.links" />
         </div>
+
+        <DeleteConfirmationModal
+            :show="Boolean(eventToDelete)"
+            title="Hapus event?"
+            :message="`Event ${eventToDelete?.name ?? ''} beserta foto terkait akan dihapus permanen.`"
+            confirm-label="Hapus Event"
+            :processing="deleteProcessing"
+            @close="closeDeleteModal"
+            @confirm="deleteEvent"
+        />
     </AuthenticatedLayout>
 </template>

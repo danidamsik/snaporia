@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Event;
+use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Photo;
 use App\Models\Setting;
 use Illuminate\Http\Request;
@@ -61,6 +63,9 @@ class PublicEventController extends Controller
             ->where('key', 'public_gallery_per_page')
             ->value('value') ?: 24;
 
+        $purchasedPhotoIds = $this->purchasedPhotoIds($request);
+        $isPackagePurchased = $this->isPackagePurchased($request, $event);
+
         $photos = Photo::query()
             ->where('event_id', $event->id)
             ->whereNotNull('watermarked_path')
@@ -68,10 +73,10 @@ class PublicEventController extends Controller
             ->orderBy('sort_order')
             ->paginate($perPage)
             ->withQueryString()
-            ->through(fn (Photo $photo) => $this->photoPayload($photo));
+            ->through(fn (Photo $photo) => $this->photoPayload($photo, $purchasedPhotoIds));
 
         return Inertia::render('Public/Events/Show', [
-            'event' => $this->eventPayload($event->loadCount('photos')),
+            'event' => $this->eventPayload($event->loadCount('photos'), $isPackagePurchased),
             'photos' => $photos,
             'filters' => [
                 'q' => $filters['q'] ?? '',
@@ -79,7 +84,7 @@ class PublicEventController extends Controller
         ]);
     }
 
-    private function eventPayload(Event $event): array
+    private function eventPayload(Event $event, bool $isPackagePurchased = false): array
     {
         $coverPhoto = $event->coverPhoto;
 
@@ -95,17 +100,73 @@ class PublicEventController extends Controller
             'cover_url' => $coverPhoto ? route('public.photos.watermarked', $coverPhoto) : null,
             'url' => route('events.show', $event),
             'package_checkout_url' => route('checkout.package.show', $event),
+            'is_package_purchased' => $isPackagePurchased,
         ];
     }
 
-    private function photoPayload(Photo $photo): array
+    private function photoPayload(Photo $photo, array $purchasedPhotoIds = []): array
     {
         return [
             'id' => $photo->id,
             'filename' => $photo->filename,
             'sort_order' => $photo->sort_order,
             'watermarked_url' => route('public.photos.watermarked', $photo),
+            'preview_url' => route('public.photos.preview', $photo),
+            'download_url' => route('public.photos.download', $photo),
             'checkout_url' => route('checkout.single.show', ['photos' => [$photo->id]]),
+            'is_purchased' => in_array($photo->id, $purchasedPhotoIds, true),
         ];
+    }
+
+    private function purchasedPhotoIds(Request $request): array
+    {
+        if (! $request->user()) {
+            return [];
+        }
+
+        return OrderItem::query()
+            ->whereHas('order', fn ($query) => $query
+                ->where('user_id', $request->user()->id)
+                ->where('status', Order::STATUS_PAID)
+            )
+            ->pluck('photo_id')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function isPackagePurchased(Request $request, Event $event): bool
+    {
+        if (! $request->user()) {
+            return false;
+        }
+
+        $hasPaidPackage = Order::query()
+            ->where('user_id', $request->user()->id)
+            ->where('event_id', $event->id)
+            ->where('type', Order::TYPE_PACKAGE)
+            ->where('status', Order::STATUS_PAID)
+            ->exists();
+
+        if ($hasPaidPackage) {
+            return true;
+        }
+
+        $eventPhotoIds = $event->photos()->pluck('id');
+        if ($eventPhotoIds->isEmpty()) {
+            return false;
+        }
+
+        $paidPhotoIds = OrderItem::query()
+            ->whereIn('photo_id', $eventPhotoIds)
+            ->whereHas('order', fn ($query) => $query
+                ->where('user_id', $request->user()->id)
+                ->where('event_id', $event->id)
+                ->where('status', Order::STATUS_PAID))
+            ->pluck('photo_id')
+            ->unique()
+            ->values();
+
+        return $eventPhotoIds->diff($paidPhotoIds)->isEmpty();
     }
 }

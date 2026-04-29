@@ -1,9 +1,11 @@
 <script setup>
 import { Link, router } from '@inertiajs/vue3';
 import { ArrowLeft, Trash2 } from 'lucide-vue-next';
+import { ref } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import DataTable from '@/Components/DataTable.vue';
+import DeleteConfirmationModal from '@/Components/DeleteConfirmationModal.vue';
 import IconButton from '@/Components/IconButton.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
 
@@ -23,13 +25,29 @@ const columns = [
     { key: 'meta', label: 'Meta' },
     { key: 'price', label: 'Harga' },
 ];
+const confirmingDelete = ref(false);
+const deleteProcessing = ref(false);
+
+const confirmDeleteTransaction = () => {
+    confirmingDelete.value = true;
+};
+
+const closeDeleteModal = () => {
+    if (!deleteProcessing.value) {
+        confirmingDelete.value = false;
+    }
+};
 
 const deleteTransaction = () => {
-    if (!confirm(`Hapus transaksi ${props.transaction.midtrans_order_id}?`)) {
-        return;
-    }
+    deleteProcessing.value = true;
 
-    router.delete(props.transaction.delete_url, { preserveScroll: true });
+    router.delete(props.transaction.delete_url, {
+        preserveScroll: true,
+        onFinish: () => {
+            deleteProcessing.value = false;
+            confirmingDelete.value = false;
+        },
+    });
 };
 
 const formatCurrency = (value) =>
@@ -70,7 +88,7 @@ const formatFileSize = (bytes) => {
         <template #header>
             <div>
                 <h1 class="font-heading text-xl font-semibold text-ink">Detail Transaksi</h1>
-                <Breadcrumbs :items="[{ label: 'Dashboard', href: route('dashboard') }, { label: 'Transaksi', href: backUrl }, { label: transaction.midtrans_order_id }]" />
+                <Breadcrumbs :items="[{ label: 'Dashboard', href: route('dashboard') }, { label: 'Transaksi', href: backUrl }, { label: 'Detail Transaksi' }]" />
             </div>
         </template>
 
@@ -84,7 +102,7 @@ const formatFileSize = (bytes) => {
                     v-if="transaction.can_delete"
                     label="Hapus transaksi"
                     variant="danger"
-                    @click="deleteTransaction"
+                    @click="confirmDeleteTransaction"
                 >
                     <Trash2 class="h-4 w-4" aria-hidden="true" />
                 </IconButton>
@@ -169,5 +187,15 @@ const formatFileSize = (bytes) => {
                 </DataTable>
             </section>
         </div>
+
+        <DeleteConfirmationModal
+            :show="confirmingDelete"
+            title="Hapus transaksi?"
+            :message="`Transaksi ${transaction.midtrans_order_id} akan dihapus dari riwayat monitoring.`"
+            confirm-label="Hapus Transaksi"
+            :processing="deleteProcessing"
+            @close="closeDeleteModal"
+            @confirm="deleteTransaction"
+        />
     </AuthenticatedLayout>
 </template>

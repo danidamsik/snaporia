@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Photo;
 use App\Models\Setting;
 use Illuminate\Http\Request;
@@ -19,6 +21,8 @@ class PublicGalleryController extends Controller
         $perPage = (int) Setting::query()
             ->where('key', 'public_gallery_per_page')
             ->value('value') ?: 24;
+
+        $purchasedPhotoIds = $this->purchasedPhotoIds($request);
 
         $photos = Photo::query()
             ->select('id', 'event_id', 'watermarked_path', 'filename', 'sort_order')
@@ -44,7 +48,10 @@ class PublicGalleryController extends Controller
                 'id' => $photo->id,
                 'filename' => $photo->filename,
                 'watermarked_url' => route('public.photos.watermarked', $photo),
+                'preview_url' => route('public.photos.preview', $photo),
+                'download_url' => route('public.photos.download', $photo),
                 'checkout_url' => route('checkout.single.show', ['photos' => [$photo->id]]),
+                'is_purchased' => in_array($photo->id, $purchasedPhotoIds, true),
                 'event' => [
                     'id' => $photo->event->id,
                     'name' => $photo->event->name,
@@ -61,5 +68,22 @@ class PublicGalleryController extends Controller
                 'q' => $filters['q'] ?? '',
             ],
         ]);
+    }
+
+    private function purchasedPhotoIds(Request $request): array
+    {
+        if (! $request->user()) {
+            return [];
+        }
+
+        return OrderItem::query()
+            ->whereHas('order', fn ($query) => $query
+                ->where('user_id', $request->user()->id)
+                ->where('status', Order::STATUS_PAID)
+            )
+            ->pluck('photo_id')
+            ->unique()
+            ->values()
+            ->all();
     }
 }

@@ -1,9 +1,11 @@
 <script setup>
 import { Link, router, useForm } from '@inertiajs/vue3';
 import { Eye, Search, Trash2 } from 'lucide-vue-next';
+import { ref } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import Breadcrumbs from '@/Components/Breadcrumbs.vue';
 import DataTable from '@/Components/DataTable.vue';
+import DeleteConfirmationModal from '@/Components/DeleteConfirmationModal.vue';
 import EmptyState from '@/Components/EmptyState.vue';
 import FormSelect from '@/Components/FormSelect.vue';
 import IconButton from '@/Components/IconButton.vue';
@@ -60,6 +62,8 @@ const form = useForm({
     date_to: props.filters.date_to ?? '',
     q: props.filters.q ?? '',
 });
+const transactionToDelete = ref(null);
+const deleteProcessing = ref(false);
 
 const statusOptions = [
     { label: 'Semua status', value: '' },
@@ -76,12 +80,30 @@ const submit = () => {
     });
 };
 
-const deleteTransaction = (transaction) => {
-    if (!confirm(`Hapus transaksi ${transaction.midtrans_order_id}?`)) {
+const confirmDeleteTransaction = (transaction) => {
+    transactionToDelete.value = transaction;
+};
+
+const closeDeleteModal = () => {
+    if (!deleteProcessing.value) {
+        transactionToDelete.value = null;
+    }
+};
+
+const deleteTransaction = () => {
+    if (!transactionToDelete.value) {
         return;
     }
 
-    router.delete(transaction.delete_url, { preserveScroll: true });
+    deleteProcessing.value = true;
+
+    router.delete(transactionToDelete.value.delete_url, {
+        preserveScroll: true,
+        onFinish: () => {
+            deleteProcessing.value = false;
+            transactionToDelete.value = null;
+        },
+    });
 };
 
 const formatCurrency = (value) =>
@@ -200,7 +222,7 @@ const formatDateTime = (value) =>
                             <Eye class="h-4 w-4" aria-hidden="true" />
                             <span class="sr-only">Lihat transaksi</span>
                         </Link>
-                        <IconButton v-if="canDelete && row.can_delete" label="Hapus transaksi" variant="danger" @click="deleteTransaction(row)">
+                        <IconButton v-if="canDelete && row.can_delete" label="Hapus transaksi" variant="danger" @click="confirmDeleteTransaction(row)">
                             <Trash2 class="h-4 w-4" aria-hidden="true" />
                         </IconButton>
                     </div>
@@ -209,5 +231,15 @@ const formatDateTime = (value) =>
 
             <Pagination :links="transactions.links" />
         </div>
+
+        <DeleteConfirmationModal
+            :show="Boolean(transactionToDelete)"
+            title="Hapus transaksi?"
+            :message="`Transaksi ${transactionToDelete?.midtrans_order_id ?? ''} akan dihapus dari riwayat monitoring.`"
+            confirm-label="Hapus Transaksi"
+            :processing="deleteProcessing"
+            @close="closeDeleteModal"
+            @confirm="deleteTransaction"
+        />
     </AuthenticatedLayout>
 </template>

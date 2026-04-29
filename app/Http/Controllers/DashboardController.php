@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Event;
 use App\Models\Order;
 use App\Models\Photo;
+use App\Models\Setting;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -15,6 +16,8 @@ class DashboardController extends Controller
 {
     public function superAdmin(): Response
     {
+        $tableLimit = $this->dashboardTableLimit();
+
         return Inertia::render('Dashboard', [
             'dashboardRole' => User::ROLE_SUPER_ADMIN,
             'stats' => [
@@ -28,7 +31,7 @@ class DashboardController extends Controller
             ],
             'recentTransactions' => $this->transactionQuery()
                 ->latest('id')
-                ->take(5)
+                ->take($tableLimit)
                 ->get()
                 ->map(fn (Transaction $transaction) => $this->transactionPayload($transaction, route('super-admin.transactions.show', $transaction))),
             'recentOrders' => [],
@@ -36,7 +39,7 @@ class DashboardController extends Controller
                 ->with('admin:id,name')
                 ->withCount('photos')
                 ->latest('id')
-                ->take(5)
+                ->take($tableLimit)
                 ->get()
                 ->map(fn (Event $event) => $this->eventPayload($event, true)),
             'quickLinks' => [
@@ -50,6 +53,7 @@ class DashboardController extends Controller
     public function admin(Request $request): Response
     {
         $adminId = $request->user()->id;
+        $tableLimit = $this->dashboardTableLimit();
 
         return Inertia::render('Dashboard', [
             'dashboardRole' => User::ROLE_ADMIN,
@@ -65,7 +69,7 @@ class DashboardController extends Controller
             'recentTransactions' => $this->transactionQuery()
                 ->whereHas('order.event', fn ($query) => $query->where('admin_id', $adminId))
                 ->latest('id')
-                ->take(5)
+                ->take($tableLimit)
                 ->get()
                 ->map(fn (Transaction $transaction) => $this->transactionPayload($transaction, route('admin.transactions.show', $transaction))),
             'recentOrders' => [],
@@ -73,7 +77,7 @@ class DashboardController extends Controller
                 ->where('admin_id', $adminId)
                 ->withCount('photos')
                 ->latest('id')
-                ->take(5)
+                ->take($tableLimit)
                 ->get()
                 ->map(fn (Event $event) => $this->eventPayload($event)),
             'quickLinks' => [
@@ -88,6 +92,13 @@ class DashboardController extends Controller
     {
         return Transaction::query()
             ->with(['order.user:id,name,email', 'order.event.admin:id,name', 'order.event:id,admin_id,name,date,location']);
+    }
+
+    private function dashboardTableLimit(): int
+    {
+        return (int) Setting::query()
+            ->where('key', 'dashboard_table_per_page')
+            ->value('value') ?: 20;
     }
 
     private function stat(string $label, int|float $value, string $icon, string $format = 'number'): array

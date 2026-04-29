@@ -22,6 +22,7 @@ const props = defineProps({
 const order = ref(props.order);
 const isCreatingPayment = ref(false);
 const isRefreshingStatus = ref(false);
+const isSnapInView = ref(false);
 let snapLoader = null;
 
 const toast = (type, title, message = '') => {
@@ -131,22 +132,37 @@ const payWithSnap = (snap, snapToken) => {
         return;
     }
 
-    snap.pay(snapToken, {
-        onSuccess: async () => {
-            toast('success', 'Pembayaran berhasil diproses.');
-            await refreshStatus({ silent: true });
-        },
-        onPending: async () => {
-            toast('info', 'Pembayaran masih menunggu konfirmasi.');
-            await refreshStatus({ silent: true });
-        },
-        onError: () => {
-            toast('error', 'Pembayaran gagal diproses.');
-        },
-        onClose: () => {
-            toast('info', 'Modal pembayaran ditutup.');
-        },
-    });
+    if (isSnapInView.value) {
+        toast('info', 'Modal Midtrans masih terbuka.');
+        return;
+    }
+
+    isSnapInView.value = true;
+
+    try {
+        snap.pay(snapToken, {
+            onSuccess: async () => {
+                isSnapInView.value = false;
+                toast('success', 'Pembayaran berhasil diproses.');
+                await refreshStatus({ silent: true });
+            },
+            onPending: async () => {
+                isSnapInView.value = false;
+                toast('info', 'Pembayaran masih menunggu konfirmasi.');
+                await refreshStatus({ silent: true });
+            },
+            onError: () => {
+                isSnapInView.value = false;
+                toast('error', 'Pembayaran gagal diproses.');
+            },
+            onClose: () => {
+                isSnapInView.value = false;
+            },
+        });
+    } catch (error) {
+        isSnapInView.value = false;
+        toast('error', 'Modal Midtrans belum bisa dibuka.', error.message);
+    }
 };
 
 const loadSnap = () => {
@@ -312,7 +328,7 @@ onMounted(() => {
                         v-if="order.status === 'pending' && order.payment?.snap_token"
                         type="button"
                         class="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-transparent bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-                        :disabled="isCreatingPayment"
+                        :disabled="isCreatingPayment || isSnapInView"
                         @click="openSnap(order.payment.snap_token)"
                     >
                         <CreditCard class="h-4 w-4" aria-hidden="true" />
@@ -322,7 +338,7 @@ onMounted(() => {
                         v-else-if="order.status === 'pending'"
                         type="button"
                         class="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-transparent bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-                        :disabled="isCreatingPayment"
+                        :disabled="isCreatingPayment || isSnapInView"
                         @click="createPayment"
                     >
                         <CreditCard class="h-4 w-4" aria-hidden="true" />
@@ -354,7 +370,7 @@ onMounted(() => {
                             <p class="mt-1 text-xs text-ink-muted">{{ item.mime_type }} · {{ formatFileSize(item.file_size) }}</p>
                         </div>
                         <div class="flex shrink-0 items-center justify-between gap-3 sm:min-w-56">
-                            <p class="text-sm font-semibold text-ink">{{ formatCurrency(item.price) }}</p>
+                            <p v-if="item.price > 0" class="text-sm font-semibold text-ink">{{ formatCurrency(item.price) }}</p>
                             <a
                                 v-if="item.download_url"
                                 :href="item.download_url"

@@ -1,6 +1,7 @@
 <script setup>
+import { computed } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import {
     Banknote,
     CalendarDays,
@@ -44,6 +45,9 @@ const props = defineProps({
         default: () => [],
     },
 });
+const page = usePage();
+const appName = computed(() => page.props.app?.name ?? 'Snaporia');
+const appTagline = computed(() => page.props.app?.tagline ?? 'Find Your Moments.');
 
 const iconMap = {
     banknote: Banknote,
@@ -85,12 +89,36 @@ const formatCurrency = (value) =>
         maximumFractionDigits: 0,
     }).format(value ?? 0);
 
+const formatCompactCurrency = (value) => {
+    const numericValue = Number(value ?? 0);
+    const absoluteValue = Math.abs(numericValue);
+    const units = [
+        { value: 1_000_000_000_000, label: 'Triliun' },
+        { value: 1_000_000_000, label: 'Miliar' },
+        { value: 1_000_000, label: 'Juta' },
+    ];
+    const unit = units.find((item) => absoluteValue >= item.value);
+
+    if (!unit) {
+        return formatCurrency(numericValue);
+    }
+
+    const compactValue = numericValue / unit.value;
+    const formattedValue = new Intl.NumberFormat('id-ID', {
+        maximumFractionDigits: Math.abs(compactValue) >= 100 ? 0 : 1,
+    }).format(compactValue);
+
+    return `Rp ${formattedValue} ${unit.label}`;
+};
+
 const formatNumber = (value) =>
     new Intl.NumberFormat('id-ID', {
         maximumFractionDigits: 0,
     }).format(value ?? 0);
 
 const formatStat = (stat) => (stat.format === 'currency' ? formatCurrency(stat.value) : formatNumber(stat.value));
+
+const formatStatPreview = (stat) => (stat.format === 'currency' ? formatCompactCurrency(stat.value) : formatStat(stat));
 
 const formatDate = (value) =>
     value
@@ -129,8 +157,8 @@ const typeLabel = (type) => (type === 'package' ? 'Paket Event' : 'Foto Satuan')
         <div class="space-y-6">
             <section class="flex flex-col gap-4 rounded-lg border border-border bg-white p-5 shadow-sm lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                    <p class="text-sm font-semibold text-primary">Snaporia</p>
-                    <h2 class="mt-1 font-heading text-2xl font-bold text-ink">Find Your Moments.</h2>
+                    <p class="text-sm font-semibold text-primary">{{ appName }}</p>
+                    <h2 class="mt-1 font-heading text-2xl font-bold text-ink">{{ appTagline }}</h2>
                 </div>
                 <div class="flex flex-wrap items-center gap-3">
                     <Link
@@ -148,10 +176,16 @@ const typeLabel = (type) => (type === 'package' ? 'Paket Event' : 'Foto Satuan')
 
             <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <div v-for="stat in stats" :key="stat.label" class="rounded-lg border border-border bg-white p-5 shadow-sm">
-                    <div class="flex items-center justify-between gap-3">
-                        <div class="min-w-0">
+                    <div class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4">
+                        <div class="min-w-0 pr-1">
                             <p class="truncate text-sm text-ink-muted">{{ stat.label }}</p>
-                            <p class="mt-2 text-2xl font-bold text-ink">{{ formatStat(stat) }}</p>
+                            <p
+                                class="mt-2 font-bold leading-tight text-ink"
+                                :class="stat.format === 'currency' ? 'text-lg sm:text-xl' : 'text-2xl'"
+                                :title="stat.format === 'currency' ? formatStat(stat) : null"
+                            >
+                                {{ formatStatPreview(stat) }}
+                            </p>
                         </div>
                         <div class="grid h-11 w-11 shrink-0 place-items-center rounded-md" :class="iconClasses[stat.icon] ?? 'bg-surface text-ink'">
                             <component :is="iconMap[stat.icon] ?? FileText" class="h-5 w-5" aria-hidden="true" />

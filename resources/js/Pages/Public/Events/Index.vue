@@ -1,5 +1,6 @@
 <script setup>
-import { useForm, Link } from '@inertiajs/vue3';
+import { computed } from 'vue';
+import { useForm, Link, usePage } from '@inertiajs/vue3';
 import { CalendarDays, Camera, Image, MapPin, Search } from 'lucide-vue-next';
 import EmptyState from '@/Components/EmptyState.vue';
 import Pagination from '@/Components/Pagination.vue';
@@ -23,6 +24,9 @@ const form = useForm({
     date: props.filters.date ?? '',
     location: props.filters.location ?? '',
 });
+const page = usePage();
+const appName = computed(() => page.props.app?.name ?? 'Snaporia');
+const appTagline = computed(() => page.props.app?.tagline ?? 'Find Your Moments.');
 
 const submit = () => {
     form.get(route('events.index'), {
@@ -53,8 +57,8 @@ const formatDate = (value) =>
         <section class="border-b border-border bg-surface">
             <div class="mx-auto grid max-w-7xl gap-5 px-4 py-8 sm:px-6 lg:grid-cols-[1fr_360px] lg:px-8">
                 <div>
-                    <p class="text-sm font-semibold text-primary">Snaporia</p>
-                    <h1 class="mt-2 font-heading text-3xl font-bold text-ink sm:text-4xl">Find Your Moments.</h1>
+                    <p class="text-sm font-semibold text-primary">{{ appName }}</p>
+                    <h1 class="mt-2 font-heading text-3xl font-bold text-ink sm:text-4xl">{{ appTagline }}</h1>
                     <p class="mt-3 max-w-2xl text-sm leading-6 text-ink-muted sm:text-base">
                         Temukan event, lihat preview watermark, lalu beli foto original dari fotografer resmi.
                     </p>

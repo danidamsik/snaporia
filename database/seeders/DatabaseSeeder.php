@@ -31,56 +31,56 @@ class DatabaseSeeder extends Seeder
                 ]));
             }
 
-            foreach ($this->events() as $event) {
-                Event::create(array_merge($event, [
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ]));
-            }
+            // foreach ($this->events() as $event) {
+            //     Event::create(array_merge($event, [
+            //         'created_at' => $now,
+            //         'updated_at' => $now,
+            //     ]));
+            // }
 
-            foreach ($this->photos() as $photo) {
-                Photo::create(array_merge($photo, [
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ]));
+            // foreach ($this->photos() as $photo) {
+            //     Photo::create(array_merge($photo, [
+            //         'created_at' => $now,
+            //         'updated_at' => $now,
+            //     ]));
 
-                $this->putDummyPhoto($photo['original_path']);
-                $this->putDummyPhoto($photo['watermarked_path']);
-            }
+            //     $this->putDummyPhoto($photo['original_path']);
+            //     $this->putDummyPhoto($photo['watermarked_path']);
+            // }
 
-            foreach ($this->orders() as $order) {
-                Order::create(array_merge($order, [
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ]));
-            }
+            // foreach ($this->orders() as $order) {
+            //     Order::create(array_merge($order, [
+            //         'created_at' => $now,
+            //         'updated_at' => $now,
+            //     ]));
+            // }
 
-            foreach ($this->orderItems() as $item) {
-                OrderItem::create(array_merge($item, [
-                    'created_at' => $now,
-                ]));
-            }
+            // foreach ($this->orderItems() as $item) {
+            //     OrderItem::create(array_merge($item, [
+            //         'created_at' => $now,
+            //     ]));
+            // }
 
-            foreach ($this->transactions() as $transaction) {
-                Transaction::create(array_merge($transaction, [
-                    'payload' => [
-                        'transaction_status' => $transaction['status'],
-                        'order_id' => $transaction['midtrans_order_id'],
-                        'gross_amount' => (string) $transaction['gross_amount'],
-                        'payment_type' => $transaction['payment_type'],
-                        'fraud_status' => $transaction['fraud_status'],
-                    ],
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ]));
-            }
+            // foreach ($this->transactions() as $transaction) {
+            //     Transaction::create(array_merge($transaction, [
+            //         'payload' => [
+            //             'transaction_status' => $transaction['status'],
+            //             'order_id' => $transaction['midtrans_order_id'],
+            //             'gross_amount' => (string) $transaction['gross_amount'],
+            //             'payment_type' => $transaction['payment_type'],
+            //             'fraud_status' => $transaction['fraud_status'],
+            //         ],
+            //         'created_at' => $now,
+            //         'updated_at' => $now,
+            //     ]));
+            // }
 
-            foreach ($this->settings() as $setting) {
-                Setting::create(array_merge($setting, [
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ]));
-            }
+            // foreach ($this->settings() as $setting) {
+            //     Setting::create(array_merge($setting, [
+            //         'created_at' => $now,
+            //         'updated_at' => $now,
+            //     ]));
+            // }
         });
     }
 

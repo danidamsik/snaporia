@@ -77,8 +77,16 @@ const formatCurrency = (value) =>
         </template>
 
         <div class="space-y-5">
-            <form class="grid gap-3 rounded-lg border border-border bg-white p-4 lg:grid-cols-[1fr_200px_220px_180px_auto]" @submit.prevent="submit">
-                <TextInput v-model="form.q" type="search" maxlength="100" placeholder="Cari nama file" />
+            <form
+                class="grid grid-cols-1 gap-3 rounded-lg border border-border bg-white p-4 md:grid-cols-3"
+                @submit.prevent="submit"
+            >
+                <TextInput
+                    v-model="form.q"
+                    type="search"
+                    maxlength="100"
+                    placeholder="Cari nama file"
+                />
                 <FormSelect
                     v-model="form.admin_id"
                     :options="[{ label: 'Semua admin', value: '' }, ...admins.map((admin) => ({ label: admin.name, value: admin.id }))]"
@@ -89,13 +97,18 @@ const formatCurrency = (value) =>
                 />
                 <FormSelect
                     v-model="form.status"
+                    class="md:col-span-2"
                     :options="[
                         { label: 'Semua status', value: '' },
                         { label: 'Ready', value: 'ready' },
                         { label: 'Watermark gagal', value: 'watermark_failed' },
                     ]"
                 />
-                <SecondaryButton type="submit" :disabled="form.processing">
+                <SecondaryButton
+                    type="submit"
+                    class="w-full"
+                    :disabled="form.processing"
+                >
                     <Search class="h-4 w-4" aria-hidden="true" />
                     Filter
                 </SecondaryButton>

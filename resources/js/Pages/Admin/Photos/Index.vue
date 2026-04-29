@@ -1,8 +1,10 @@
 <script setup>
 import { Link, router, useForm } from '@inertiajs/vue3';
 import { ImageOff, Search, Trash2, Upload } from 'lucide-vue-next';
+import { ref } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import Breadcrumbs from '@/Components/Breadcrumbs.vue';
+import DeleteConfirmationModal from '@/Components/DeleteConfirmationModal.vue';
 import EmptyState from '@/Components/EmptyState.vue';
 import IconButton from '@/Components/IconButton.vue';
 import Pagination from '@/Components/Pagination.vue';
@@ -33,6 +35,8 @@ const form = useForm({
     event_id: props.filters.event_id ?? '',
     q: props.filters.q ?? '',
 });
+const photoToDelete = ref(null);
+const deleteProcessing = ref(false);
 
 const submit = () => {
     form.get(route('admin.photos.index'), {
@@ -61,12 +65,30 @@ const formatBytes = (bytes) => {
     return `${(bytes / 1024 ** index).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
 };
 
-const deletePhoto = (photo) => {
-    if (!confirm(`Hapus foto ${photo.filename}?`)) {
+const confirmDeletePhoto = (photo) => {
+    photoToDelete.value = photo;
+};
+
+const closeDeleteModal = () => {
+    if (!deleteProcessing.value) {
+        photoToDelete.value = null;
+    }
+};
+
+const deletePhoto = () => {
+    if (!photoToDelete.value) {
         return;
     }
 
-    router.delete(route('admin.photos.destroy', photo.id), { preserveScroll: true });
+    deleteProcessing.value = true;
+
+    router.delete(route('admin.photos.destroy', photoToDelete.value.id), {
+        preserveScroll: true,
+        onFinish: () => {
+            deleteProcessing.value = false;
+            photoToDelete.value = null;
+        },
+    });
 };
 </script>
 
@@ -157,7 +179,7 @@ const deletePhoto = (photo) => {
                                 label="Hapus foto"
                                 variant="danger"
                                 :disabled="photo.order_items_count > 0"
-                                @click="deletePhoto(photo)"
+                                @click="confirmDeletePhoto(photo)"
                             >
                                 <Trash2 class="h-4 w-4" aria-hidden="true" />
                             </IconButton>
@@ -172,5 +194,15 @@ const deletePhoto = (photo) => {
 
             <Pagination :links="photos.links" />
         </div>
+
+        <DeleteConfirmationModal
+            :show="Boolean(photoToDelete)"
+            title="Hapus foto?"
+            :message="`Foto ${photoToDelete?.filename ?? ''} akan dihapus permanen dari event ini.`"
+            confirm-label="Hapus Foto"
+            :processing="deleteProcessing"
+            @close="closeDeleteModal"
+            @confirm="deletePhoto"
+        />
     </AuthenticatedLayout>
 </template>

@@ -3,7 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\Event;
+use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Photo;
+use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
@@ -95,6 +98,93 @@ class PublicBrowsingTest extends TestCase
         $this->assertStringNotContainsString('original_path', $response->getContent());
     }
 
+    public function test_event_detail_marks_paid_photos_as_purchased_for_visitor(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $visitor = User::factory()->create(['role' => User::ROLE_VISITOR]);
+        $event = $this->makeEvent($admin);
+        $purchasedPhoto = $this->makePhoto($event, ['filename' => 'purchased.jpg']);
+        $availablePhoto = $this->makePhoto($event, ['filename' => 'available.jpg', 'sort_order' => 2]);
+        $order = Order::create([
+            'user_id' => $visitor->id,
+            'order_code' => 'SNP-PUBLIC-0001',
+            'type' => Order::TYPE_SINGLE,
+            'event_id' => $event->id,
+            'total_amount' => 25000,
+            'status' => Order::STATUS_PAID,
+            'paid_at' => now(),
+        ]);
+        OrderItem::create([
+            'order_id' => $order->id,
+            'photo_id' => $purchasedPhoto->id,
+            'price' => 25000,
+        ]);
+
+        $this->actingAs($visitor)
+            ->get(route('events.show', $event))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('photos.data.0.filename', 'purchased.jpg')
+                ->where('photos.data.0.is_purchased', true)
+                ->where('photos.data.1.filename', 'available.jpg')
+                ->where('photos.data.1.is_purchased', false)
+                ->where('event.is_package_purchased', false)
+            );
+    }
+
+    public function test_event_detail_marks_package_as_purchased_when_package_or_all_photos_are_paid(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $visitor = User::factory()->create(['role' => User::ROLE_VISITOR]);
+        $event = $this->makeEvent($admin);
+        $firstPhoto = $this->makePhoto($event, ['filename' => 'first.jpg']);
+        $secondPhoto = $this->makePhoto($event, ['filename' => 'second.jpg', 'sort_order' => 2]);
+        $singleOrder = Order::create([
+            'user_id' => $visitor->id,
+            'order_code' => 'SNP-PUBLIC-0002',
+            'type' => Order::TYPE_SINGLE,
+            'event_id' => $event->id,
+            'total_amount' => 50000,
+            'status' => Order::STATUS_PAID,
+            'paid_at' => now(),
+        ]);
+        OrderItem::create([
+            'order_id' => $singleOrder->id,
+            'photo_id' => $firstPhoto->id,
+            'price' => 25000,
+        ]);
+        OrderItem::create([
+            'order_id' => $singleOrder->id,
+            'photo_id' => $secondPhoto->id,
+            'price' => 25000,
+        ]);
+
+        $this->actingAs($visitor)
+            ->get(route('events.show', $event))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('event.is_package_purchased', true)
+            );
+
+        $packageVisitor = User::factory()->create(['role' => User::ROLE_VISITOR]);
+        Order::create([
+            'user_id' => $packageVisitor->id,
+            'order_code' => 'SNP-PUBLIC-0003',
+            'type' => Order::TYPE_PACKAGE,
+            'event_id' => $event->id,
+            'total_amount' => 100000,
+            'status' => Order::STATUS_PAID,
+            'paid_at' => now(),
+        ]);
+
+        $this->actingAs($packageVisitor)
+            ->get(route('events.show', $event))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('event.is_package_purchased', true)
+            );
+    }
+
     public function test_gallery_search_only_uses_published_event_photos(): void
     {
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
@@ -114,7 +204,33 @@ class PublicBrowsingTest extends TestCase
             );
 
         $this->assertStringNotContainsString('private-wedding.jpg', $response->getContent());
-        $this->assertStringNotContainsString('original_path', $response->getContent());
+            $this->assertStringNotContainsString('original_path', $response->getContent());
+    }
+
+    public function test_public_gallery_per_page_uses_super_admin_setting(): void
+    {
+        Setting::create([
+            'key' => 'public_gallery_per_page',
+            'value' => '6',
+            'description' => 'Fixture setting',
+        ]);
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $event = $this->makeEvent($admin);
+
+        for ($index = 1; $index <= 7; $index++) {
+            $this->makePhoto($event, [
+                'filename' => "photo-{$index}.jpg",
+                'sort_order' => $index,
+            ]);
+        }
+
+        $this->get(route('events.show', $event))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('photos.per_page', 6)
+                ->has('photos.data', 6)
+            );
     }
 
     public function test_public_watermarked_photo_route_streams_only_published_event_previews(): void
@@ -132,6 +248,53 @@ class PublicBrowsingTest extends TestCase
 
         $this->get(route('public.photos.watermarked', $publishedPhoto))->assertOk();
         $this->get(route('public.photos.watermarked', $draftPhoto))->assertNotFound();
+    }
+
+    public function test_public_photo_download_returns_watermark_until_photo_is_paid(): void
+    {
+        Storage::fake('local');
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $visitor = User::factory()->create(['role' => User::ROLE_VISITOR]);
+        $event = $this->makeEvent($admin);
+        $photo = $this->makePhoto($event, [
+            'filename' => 'festival-001.png',
+            'original_path' => 'photos/original/festival-001.png',
+            'watermarked_path' => 'photos/watermarked/festival-001.jpg',
+        ]);
+
+        Storage::disk('local')->put($photo->original_path, 'original-content');
+        Storage::disk('local')->put($photo->watermarked_path, 'watermark-content');
+
+        $this->get(route('public.photos.preview', $photo))->assertOk();
+
+        $this->get(route('public.photos.download', $photo))
+            ->assertOk()
+            ->assertDownload('festival-001-watermark.jpg');
+
+        $order = Order::create([
+            'user_id' => $visitor->id,
+            'order_code' => 'SNP-PUBLIC-0004',
+            'type' => Order::TYPE_SINGLE,
+            'event_id' => $event->id,
+            'total_amount' => 25000,
+            'status' => Order::STATUS_PAID,
+            'paid_at' => now(),
+        ]);
+        OrderItem::create([
+            'order_id' => $order->id,
+            'photo_id' => $photo->id,
+            'price' => 25000,
+        ]);
+
+        $this->actingAs($visitor)
+            ->get(route('public.photos.preview', $photo))
+            ->assertOk();
+
+        $this->actingAs($visitor)
+            ->get(route('public.photos.download', $photo))
+            ->assertOk()
+            ->assertDownload('festival-001.png');
     }
 
     private function makeEvent(User $admin, array $overrides = []): Event

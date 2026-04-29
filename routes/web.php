@@ -39,6 +39,8 @@ Route::get('/events/{event}', [PublicEventController::class, 'show'])->name('eve
 
 Route::get('/gallery', [PublicGalleryController::class, 'index'])->name('gallery.index');
 Route::get('/photos/{photo}/watermarked', [PublicPhotoController::class, 'watermarked'])->name('public.photos.watermarked');
+Route::get('/photos/{photo}/preview', [PublicPhotoController::class, 'preview'])->name('public.photos.preview');
+Route::get('/photos/{photo}/download', [PublicPhotoController::class, 'download'])->name('public.photos.download');
 Route::post('/payment/midtrans/notification', [PaymentController::class, 'notification'])->name('payment.midtrans.notification');
 
 Route::get('/dashboard', function (): RedirectResponse {

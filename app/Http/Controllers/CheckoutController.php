@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Event;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Photo;
 use App\Models\Setting;
 use App\Services\PaymentTransactionService;
@@ -97,6 +98,8 @@ class CheckoutController extends Controller
     public function package(Request $request, Event $event): Response|RedirectResponse
     {
         $photos = $this->validatedPackagePhotos($event);
+        $packageCredit = $this->packageCreditForUser($request->user()->id, $event);
+        $totalAmount = $this->discountedPackageAmount($event, $packageCredit);
 
         $duplicate = $this->findDuplicatePackagePurchase($request, $event);
         if ($duplicate) {
@@ -110,8 +113,9 @@ class CheckoutController extends Controller
                 type: Order::TYPE_PACKAGE,
                 event: $event,
                 photosCount: $photos->count(),
-                totalAmount: (float) $event->price_package,
+                totalAmount: $totalAmount,
                 storeUrl: route('checkout.package.store', $event),
+                packageCredit: $packageCredit,
             ),
         ]);
     }
@@ -119,6 +123,8 @@ class CheckoutController extends Controller
     public function storePackage(Request $request, Event $event, PaymentTransactionService $payments): JsonResponse|RedirectResponse
     {
         $photos = $this->validatedPackagePhotos($event);
+        $packageCredit = $this->packageCreditForUser($request->user()->id, $event);
+        $totalAmount = $this->discountedPackageAmount($event, $packageCredit);
 
         $duplicate = $this->findDuplicatePackagePurchase($request, $event);
         if ($duplicate) {
@@ -134,15 +140,16 @@ class CheckoutController extends Controller
                 ->with('warning', 'Kamu sudah memiliki pembelian paid untuk paket event ini.');
         }
 
-        $order = DB::transaction(function () use ($request, $event, $photos): Order {
+        $order = DB::transaction(function () use ($request, $event, $photos, $totalAmount): Order {
             $order = Order::create([
                 'user_id' => $request->user()->id,
                 'order_code' => $this->generateOrderCode(),
                 'type' => Order::TYPE_PACKAGE,
                 'event_id' => $event->id,
-                'total_amount' => $event->price_package,
-                'status' => Order::STATUS_PENDING,
-                'expires_at' => $this->pendingExpiresAt(),
+                'total_amount' => $totalAmount,
+                'status' => $totalAmount > 0 ? Order::STATUS_PENDING : Order::STATUS_PAID,
+                'expires_at' => $totalAmount > 0 ? $this->pendingExpiresAt() : null,
+                'paid_at' => $totalAmount > 0 ? null : now(),
             ]);
 
             $order->items()->createMany(
@@ -154,6 +161,20 @@ class CheckoutController extends Controller
 
             return $order;
         });
+
+        if ((float) $order->total_amount <= 0) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Paket event aktif tanpa pembayaran tambahan.',
+                    'checkout' => $this->orderPayload($order),
+                    'payment' => null,
+                ], 201);
+            }
+
+            return redirect()
+                ->route('checkout.orders.show', $order)
+                ->with('success', 'Paket event aktif tanpa pembayaran tambahan.');
+        }
 
         if ($request->expectsJson()) {
             return $this->createPaymentJson($order, $payments);
@@ -290,6 +311,7 @@ class CheckoutController extends Controller
         float $totalAmount,
         string $storeUrl,
         array $photoIds = [],
+        array $packageCredit = [],
     ): array {
         return [
             'mode' => 'preview',
@@ -300,6 +322,7 @@ class CheckoutController extends Controller
             'expires_at' => $this->pendingExpiresAt()->toIso8601String(),
             'store_url' => $storeUrl,
             'photo_ids' => $photoIds,
+            'pricing' => $this->pricingPayload($type, $event, $packageCredit),
             'midtrans' => $this->midtransPayload(),
         ];
     }
@@ -321,6 +344,9 @@ class CheckoutController extends Controller
     {
         $order->loadMissing(['event', 'items.photo']);
         $transaction = $order->transactions()->latest()->first();
+        $packageCredit = $order->type === Order::TYPE_PACKAGE
+            ? $this->packageCreditForUser($order->user_id, $order->event)
+            : [];
 
         return [
             'mode' => 'order',
@@ -335,6 +361,7 @@ class CheckoutController extends Controller
             'pay_url' => route('payment.orders.pay', $order),
             'refresh_url' => route('payment.orders.refresh', $order),
             'payment' => $transaction ? $this->paymentPayload($transaction) : null,
+            'pricing' => $this->pricingPayload($order->type, $order->event, $packageCredit),
             'photos' => $order->items
                 ->map(fn ($item) => [
                     'id' => $item->photo->id,
@@ -343,6 +370,53 @@ class CheckoutController extends Controller
                 ])
                 ->values(),
             'midtrans' => $this->midtransPayload(),
+        ];
+    }
+
+    private function pricingPayload(string $type, Event $event, array $packageCredit = []): array
+    {
+        if ($type !== Order::TYPE_PACKAGE) {
+            return [];
+        }
+
+        return [
+            'package_price' => (float) $event->price_package,
+            'single_purchase_credit' => (float) ($packageCredit['amount'] ?? 0),
+            'purchased_photos_count' => (int) ($packageCredit['count'] ?? 0),
+            'purchased_photos' => $packageCredit['photos'] ?? [],
+        ];
+    }
+
+    private function discountedPackageAmount(Event $event, array $packageCredit): float
+    {
+        return max(0, (float) $event->price_package - (float) ($packageCredit['amount'] ?? 0));
+    }
+
+    private function packageCreditForUser(int $userId, Event $event): array
+    {
+        $items = OrderItem::query()
+            ->whereHas('order', fn ($query) => $query
+                ->where('user_id', $userId)
+                ->where('event_id', $event->id)
+                ->where('type', Order::TYPE_SINGLE)
+                ->where('status', Order::STATUS_PAID))
+            ->with('photo:id,filename,sort_order')
+            ->get()
+            ->unique('photo_id')
+            ->sortBy(fn (OrderItem $item) => $item->photo?->sort_order ?? $item->id)
+            ->values();
+
+        return [
+            'amount' => (float) $items->sum(fn (OrderItem $item) => (float) $item->price),
+            'count' => $items->count(),
+            'photos' => $items
+                ->map(fn (OrderItem $item) => [
+                    'id' => $item->photo_id,
+                    'filename' => $item->photo?->filename ?? 'Foto '.$item->photo_id,
+                    'price' => (float) $item->price,
+                ])
+                ->values()
+                ->all(),
         ];
     }
 

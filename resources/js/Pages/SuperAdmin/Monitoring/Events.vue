@@ -83,8 +83,16 @@ const formatDate = (value) =>
         </template>
 
         <div class="space-y-5">
-            <form class="grid gap-3 rounded-lg border border-border bg-white p-4 lg:grid-cols-[1fr_200px_160px_150px_150px_auto]" @submit.prevent="submit">
-                <TextInput v-model="form.q" type="search" maxlength="100" placeholder="Cari event, lokasi, tanggal, atau file" />
+            <form
+                class="grid grid-cols-1 gap-3 rounded-lg border border-border bg-white p-4 md:grid-cols-3"
+                @submit.prevent="submit"
+            >
+                <TextInput
+                    v-model="form.q"
+                    type="search"
+                    maxlength="100"
+                    placeholder="Cari event, lokasi, tanggal, atau file"
+                />
                 <FormSelect
                     v-model="form.admin_id"
                     :options="[{ label: 'Semua admin', value: '' }, ...admins.map((admin) => ({ label: admin.name, value: admin.id }))]"
@@ -100,16 +108,20 @@ const formatDate = (value) =>
                 <input
                     v-model="form.date_from"
                     type="date"
-                    class="min-h-10 rounded-md border-border text-sm shadow-sm focus:border-primary focus:ring-primary"
+                    class="min-h-10 w-full min-w-0 rounded-md border-border text-sm shadow-sm focus:border-primary focus:ring-primary"
                     aria-label="Tanggal awal"
                 />
                 <input
                     v-model="form.date_to"
                     type="date"
-                    class="min-h-10 rounded-md border-border text-sm shadow-sm focus:border-primary focus:ring-primary"
+                    class="min-h-10 w-full min-w-0 rounded-md border-border text-sm shadow-sm focus:border-primary focus:ring-primary"
                     aria-label="Tanggal akhir"
                 />
-                <SecondaryButton type="submit" :disabled="form.processing">
+                <SecondaryButton
+                    type="submit"
+                    class="w-full"
+                    :disabled="form.processing"
+                >
                     <Search class="h-4 w-4" aria-hidden="true" />
                     Filter
                 </SecondaryButton>

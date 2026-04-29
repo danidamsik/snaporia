@@ -58,6 +58,28 @@ class SuperAdminSettingsTest extends TestCase
         ]);
     }
 
+    public function test_updated_site_settings_are_shared_as_application_branding(): void
+    {
+        $superAdmin = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
+        $this->seedSettings();
+
+        $this->actingAs($superAdmin)
+            ->put(route('super-admin.settings.update'), [
+                'settings' => $this->settingsPayload([
+                    'site_name' => 'Studio Foto Pro',
+                    'site_tagline' => 'Capture Every Detail.',
+                ]),
+            ])
+            ->assertRedirect();
+
+        $this->get(route('events.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('app.name', 'Studio Foto Pro')
+                ->where('app.tagline', 'Capture Every Detail.')
+            );
+    }
+
     public function test_settings_reject_sensitive_or_unknown_keys(): void
     {
         $superAdmin = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
